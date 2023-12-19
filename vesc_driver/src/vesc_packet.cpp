@@ -305,6 +305,16 @@ int VescPacketValues::getFaultCode() const
   return static_cast<int32_t>(*(payload_end_.first + FAULT_CODE));
 }
 
+
+/**
+ * @brief Gets VESC ID where the packet came from
+ * @return uint8_t vesc id
+ **/
+uint8_t VescPacketValues::getVescID() const
+{
+  return static_cast<uint8_t>(*(payload_end_.first + VESC_ID));
+}
+
 /**
  * @brief Reads a value from the buffer
  * @param map_id start address to read
@@ -506,16 +516,18 @@ VescPacketFwdToCAN::VescPacketFwdToCAN(const VescPacket &packet, uint8_t can_add
   *(frame_.end() - 3) = static_cast<uint8_t>(crc >> 8);
   *(frame_.end() - 2) = static_cast<uint8_t>(crc & 0xFF);
 
-  std::cout << "************** OLD:\n";
-  for(auto it = packet.payload_end_.first; it != packet.payload_end_.second;  ++it){
-    std::cout << unsigned(*it) << ", ";
-  }
-  std::cout << std::endl;
-  std::cout << "**** NEW:\n";
-  for(auto it = payload_end_.first; it != payload_end_.second;  ++it){
-    std::cout << unsigned(*it) << ", ";
-  }
-  std::cout << "\n\n" << std::endl;
+
+  // // RANDEL: DEBUG printout
+  // std::cout << "************** OLD:\n";
+  // for(auto it = packet.payload_end_.first; it != packet.payload_end_.second;  ++it){
+  //   std::cout << unsigned(*it) << ", ";
+  // }
+  // std::cout << std::endl;
+  // std::cout << "**** NEW:\n";
+  // for(auto it = payload_end_.first; it != payload_end_.second;  ++it){
+  //   std::cout << unsigned(*it) << ", ";
+  // }
+  // std::cout << "\n\n" << std::endl;
 
   
 

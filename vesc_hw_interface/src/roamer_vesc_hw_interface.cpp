@@ -51,220 +51,147 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     return false;
   }
 
-  // initializes the joint name
-  nh.param<std::string>("joint_name", joint_name_, "joint_vesc");
 
-  // // loads joint limits
-  // std::string robot_description_name, robot_description;
-  // nh.param<std::string>("robot_description_name", robot_description_name, "/robot_description");
-
-  // // parses the urdf and extract joint type
-  // std::string joint_type;
-  // if (nh.getParam(robot_description_name, robot_description))
-  // {
-  //   const urdf::ModelInterfaceSharedPtr urdf = urdf::parseURDF(robot_description);
-  //   const urdf::JointConstSharedPtr urdf_joint = urdf->getJoint(joint_name_);
-
-  //   if (getJointLimits(urdf_joint, joint_limits_))
-  //   {
-  //     ROS_INFO("Joint limits are loaded");
-  //     // fprintf(stderr, "pos_lim: [%d, %f, %f]\n", joint_limits_.has_position_limits, joint_limits_.min_position, joint_limits_.max_position);
-  //     // fprintf(stderr, "vel_lim: [%d, %f]\n", joint_limits_.has_velocity_limits, joint_limits_.max_velocity);
-  //     // fprintf(stderr, "eff_lim: [%d, %f]\n", joint_limits_.has_effort_limits, joint_limits_.max_effort);
-  //     // fprintf(stderr, "acc_lim: [%d, %f]\n", joint_limits_.has_acceleration_limits, joint_limits_.max_acceleration);
-  //     // fprintf(stderr, "jrk_lim: [%d, %f]\n", joint_limits_.has_jerk_limits, joint_limits_.max_jerk);
-  //     // fprintf(stderr, "ang_WA: [%d]\n", joint_limits_.angle_wraparound);
-  //   }
-    
-  //   switch (urdf_joint->type)
-  //   {
-  //     case urdf::Joint::REVOLUTE:
-  //       joint_type = "revolute";
-  //       break;
-  //     case urdf::Joint::CONTINUOUS:
-  //       joint_type = "continuous";
-  //       break;
-  //     case urdf::Joint::PRISMATIC:
-  //       joint_type = "prismatic";
-  //       break;
-  //   }
-  //   // ROS_INFO("RANDEL: Joint: [%s] is (%s)", joint_name_.c_str(), joint_type.c_str());
-  // }
-
-  // **** RANDEL: hardcode limits instead of parsing from URDF so that we can run this BEFORE URDF!!!!
-  std::string joint_type("continuous");
-  joint_limits_.has_velocity_limits = true;
-  joint_limits_.max_velocity = 1000.0;
-  joint_limits_.has_effort_limits = true;
-  joint_limits_.max_effort = 100.0;
-
-  // initializes commands and states
-  // command_ = 0.0;
-  // position_ = 0.0;
-  // velocity_ = 0.0;
-  // effort_ = 0.0;
-
-  // reads system parameters
-  nh.param<double>("gear_ratio", gear_ratio_, 1.0);
-  nh.param<double>("torque_const", torque_const_, 1.0);
-  nh.param<int>("num_hall_sensors", num_hall_sensors_, 3);
-  nh.param<double>("screw_lead", screw_lead_, 1.0);
-  ROS_INFO("Gear ratio is set to %f", gear_ratio_);
-  ROS_INFO("Torque constant is set to %f", torque_const_);
-  ROS_INFO("The number of hall sensors is set to %d", num_hall_sensors_);
-  ROS_INFO("Screw lead is set to %f", screw_lead_);
-
-  // check num of rotor poles
-  nh.param<int>("num_rotor_poles", num_rotor_poles_, 2);
-  ROS_INFO("The number of rotor poles is set to %d", num_rotor_poles_);
-  if (num_rotor_poles_ % 2 != 0)
-  {
-    ROS_ERROR("There should be even number of rotor poles");
-    ros::shutdown();
-    return false;
-  }
-
-  // reads driving mode setting
-  // - assigns an empty string if param. is not found
-  nh.param<std::string>("command_mode", command_mode_, "");
-  ROS_INFO("mode: %s", command_mode_.data());
-
-  // check joint type
-  joint_type_ = urdf::Joint::UNKNOWN;
-  // nh.getParam("joint_type", joint_type);
-  ROS_INFO("joint type: %s", joint_type.data());
-  if (joint_type == "revolute")
-  {
-    joint_type_ = urdf::Joint::REVOLUTE;
-  }
-  else if (joint_type == "continuous")
-  {
-    joint_type_ = urdf::Joint::CONTINUOUS;
-  }
-  else if (joint_type == "prismatic")
-  {
-    joint_type_ = urdf::Joint::PRISMATIC;
-  }
-  if ((joint_type_ != urdf::Joint::REVOLUTE) && (joint_type_ != urdf::Joint::CONTINUOUS) &&
-      (joint_type_ != urdf::Joint::PRISMATIC))
-  {
-    ROS_ERROR("Verify your joint type");
-    ros::shutdown();
-    return false;
-  }
-
-  // registers a state handle and its interface
-  hardware_interface::JointStateHandle state_handle(joint_name_, &p_wheel_pos_[0], &p_wheel_vel_[0], &p_wheel_eff_[0]);
-  joint_state_interface_.registerHandle(state_handle);
-  registerInterface(&joint_state_interface_);
-
-  // registers specified command handle and its interface
-  if (command_mode_ == "velocity" || command_mode_ == "velocity_duty")
-  {
-    hardware_interface::JointHandle velocity_handle(joint_state_interface_.getHandle(joint_name_), &cmds_[0]);
-    joint_velocity_interface_.registerHandle(velocity_handle);
-    registerInterface(&joint_velocity_interface_);
-
-    joint_limits_interface::VelocityJointSaturationHandle limit_handle(velocity_handle, joint_limits_);
-    limit_velocity_interface_.registerHandle(limit_handle);
-    if (command_mode_ == "velocity_duty")
-    {
-      wheel_controller_.init(nh, &vesc_interface_);
-      wheel_controller_.setGearRatio(gear_ratio_);
-      wheel_controller_.setTorqueConst(torque_const_);
-      wheel_controller_.setRotorPoles(num_rotor_poles_);
-      wheel_controller_.setHallSensors(num_hall_sensors_);
+  // **** RANDEL: START new implementation ****************
+  // create a main motor directly connected to UART
+  for (int i=0; i < 4; i++){
+    if (i==0){
+      motors[i] = vesc_hw_interface::xr1PoweredMotor(motor_names[i], "velocity", motor_vesc_ids[i], true, false);
+    } else{
+      motors[i] = vesc_hw_interface::xr1PoweredMotor(motor_names[i], "velocity", motor_vesc_ids[i] ,false, true);
     }
+    motors[i].joint_limits_.has_velocity_limits = true;
+    motors[i].joint_limits_.max_velocity = 1000.0;
+    motors[i].joint_limits_.has_effort_limits = true;
+    motors[i].joint_limits_.max_effort = 100.0;
+
+    idTomotor_ptr_map[motors[i].vesc_id_] = &motors[i];   // insert to map
+    // Create map for motors
+
+    // checking motors 
+    if (motors[0].num_rotor_poles_ % 2 != 0){
+      ROS_ERROR("There should be even number of rotor poles");
+      ros::shutdown();
+      return false;
+    }
+    if (motors[0].joint_type_ == urdf::Joint::UNKNOWN){
+      ROS_ERROR("Verify your joint type");
+      ros::shutdown();
+      return false;
+    }
+    // // reads system parameters
+    // ROS_INFO("Gear ratio is set to %f", motors[i].gear_ratio_);
+    // ROS_INFO("Torque constant is set to %f", motors[i].torque_const_);
+    // ROS_INFO("The number of hall sensors is set to %d", motors[i].num_hall_sensors_);
+    // ROS_INFO("Screw lead is set to %f", motors[i].screw_lead_);
+    // ROS_INFO("The number of rotor poles is set to %d", motors[i].num_rotor_poles_);
+    // ROS_INFO("mode: %s", motors[i].command_mode_.data());
+    // ROS_INFO("joint type: %s", motors[i].joint_type_);
   }
-  else if (command_mode_ == "effort" || command_mode_ == "effort_duty")
-  {
-    hardware_interface::JointHandle effort_handle(joint_state_interface_.getHandle(joint_name_), &cmds_[0]);
-    joint_effort_interface_.registerHandle(effort_handle);
-    registerInterface(&joint_effort_interface_);
 
-    joint_limits_interface::EffortJointSaturationHandle limit_handle(effort_handle, joint_limits_);
-    limit_effort_interface_.registerHandle(limit_handle);
-  }
-  else
-  {
-    ROS_ERROR("Verify your command mode setting");
-    ros::shutdown();
-    return false;
+  // Create interfaces for leg sensors
+  for (int i=0; i < 4; i++){
+    rb[i] = xr1JointSensor(rb_names[i], false, true);
   }
 
+  // Create passive wheels 
+  for (int i=0; i < 2; i++){
+    passive_wheels[i] = xr1PoweredMotor(passive_w_names[i], "velocity", i+10, false, true);
+  }
+  
 
-  // ***************************************************
-  // **** rocker and bogie *****************************
-  // reset
-  memset(cmds_, 0, sizeof(cmds_));
-  memset(p_wheel_pos_, 0, sizeof(p_wheel_pos_));
-  memset(p_wheel_vel_, 0, sizeof(p_wheel_vel_));
-  memset(p_wheel_eff_, 0, sizeof(p_wheel_eff_));
-  memset(rb_pos_, 0, sizeof(rb_pos_));
-  memset(rb_vel_, 0, sizeof(rb_vel_));
-  memset(rb_eff_, 0, sizeof(rb_eff_));
-
-
-  // RANDEL: for mock hw interface
-  makeMockVelInterface(std::string("wheel_rear_left_joint"), 1);
-  makeMockVelInterface(std::string("wheel_front_right_joint"), 2);
-  makeMockVelInterface(std::string("wheel_rear_right_joint"), 3);
-
-  makeMockVelInterface(std::string("wheel_middle_left_joint"), 0);
-  makeMockVelInterface(std::string("wheel_middle_right_joint"), 2);
-
-  makeMockStateInterface(std::string("rocker_left_joint"), 0);
-  makeMockStateInterface(std::string("bogie_left_joint"), 1);
-  makeMockStateInterface(std::string("rocker_right_joint"), 2);
-  makeMockStateInterface(std::string("bogie_right_joint"), 3);
+  registerControlInterfaces(nh_root, nh);
+  for (int i=0; i < 4; i++){
+    fprintf(stderr, "Motor[%d] id: %d\n", i, motors[i].vesc_id_);
+  }
+  // **** RANDEL: END new implementation ****************
 
 
   return true;
 }
 
+void XR1VescHwInterface::registerControlInterfaces(ros::NodeHandle& nh_root, ros::NodeHandle& nh){
+  // REGISTER MOTORS
+  for (auto &m : motors){
+    // Registers motor to the state interface (for read)
+    fprintf(stderr, "^^^^ Registering motor id[%d]\n", m.vesc_id_);
+    hardware_interface::JointStateHandle state_handle(m.joint_name_, &(m.pos), &(m.vel), &(m.eff));
+    joint_state_interface_.registerHandle(state_handle);
 
-void XR1VescHwInterface::makeWheelVelInterface(const std::string &joint_name, int cmd_index, const ros::NodeHandle &nh){
-  if (command_mode_ == "velocity" || command_mode_ == "velocity_duty")
-  {
-    hardware_interface::JointHandle velocity_handle(joint_state_interface_.getHandle(joint_name.c_str()), &cmds_[cmd_index]);
+    // Registers motor to the velocity interface (for write)
+    hardware_interface::JointHandle velocity_handle(joint_state_interface_.getHandle(m.joint_name_.c_str()), &(m.cmd));
     joint_velocity_interface_.registerHandle(velocity_handle);
+    
+    // if (m.command_mode_ == "velocity_duty")
+    // {
+    //   wheel_controller_.init(nh, &vesc_interface_);
+    //   wheel_controller_.setGearRatio(m.gear_ratio_);
+    //   wheel_controller_.setTorqueConst(m.torque_const_);
+    //   wheel_controller_.setRotorPoles(m.num_rotor_poles_);
+    //   wheel_controller_.setHallSensors(m.num_hall_sensors_);
+    // }
+
+    joint_limits_interface::VelocityJointSaturationHandle limit_handle(velocity_handle, m.joint_limits_);
+    m.limit_velocity_interface_.registerHandle(limit_handle);
+    registerInterface(&joint_state_interface_);
     registerInterface(&joint_velocity_interface_);
-
-    joint_limits_interface::VelocityJointSaturationHandle limit_handle(velocity_handle, joint_limits_);
-    limit_velocity_interface_.registerHandle(limit_handle);
-    if (command_mode_ == "velocity_duty")
-    {
-      wheel_controller_.init(nh, &vesc_interface_);
-      wheel_controller_.setGearRatio(gear_ratio_);
-      wheel_controller_.setTorqueConst(torque_const_);
-      wheel_controller_.setRotorPoles(num_rotor_poles_);
-      wheel_controller_.setHallSensors(num_hall_sensors_);
-    }
   }
-}
 
-void XR1VescHwInterface::makeMockVelInterface(const std::string &joint_name, int cmd_index){
-  hardware_interface::JointStateHandle _state_handle(joint_name.c_str(), &p_wheel_pos_[cmd_index], &p_wheel_vel_[cmd_index], &p_wheel_eff_[cmd_index]);
-  joint_state_interface_.registerHandle(_state_handle);
+  // REGISTER LEG SENSORS
+  for (auto &s : rb){
+    hardware_interface::JointStateHandle _state_handle(s.joint_name_.c_str(), &(s.pos), &(s.vel), &(s.vel));
+    joint_state_interface_.registerHandle(_state_handle);
+  }
+
+  // **** Register passive wheels as MOCK (copy front wheel states) ****** reads from actual powered motor
+  hardware_interface::JointStateHandle state_handle_p1(passive_wheels[0].joint_name_, &(motors[0].pos), &(motors[0].vel), &(motors[0].eff));
+  joint_state_interface_.registerHandle(state_handle_p1);
+  hardware_interface::JointHandle velocity_handle_p1(joint_state_interface_.getHandle(passive_wheels[0].joint_name_.c_str()), &(passive_wheels[0].cmd));
+  joint_velocity_interface_.registerHandle(velocity_handle_p1);
+
+  hardware_interface::JointStateHandle state_handle_p2(passive_wheels[1].joint_name_, &(motors[2].pos), &(motors[2].vel), &(motors[2].eff));
+  joint_state_interface_.registerHandle(state_handle_p2);
+  hardware_interface::JointHandle velocity_handle_p2(joint_state_interface_.getHandle(passive_wheels[1].joint_name_.c_str()), &(passive_wheels[1].cmd));
+  joint_velocity_interface_.registerHandle(velocity_handle_p2);
+
+  
+
   registerInterface(&joint_state_interface_);
-
-  hardware_interface::JointHandle _vel_handle(joint_state_interface_.getHandle(joint_name.c_str()), &cmds_[cmd_index]);
-  joint_velocity_interface_.registerHandle(_vel_handle);
   registerInterface(&joint_velocity_interface_);
 }
 
-void XR1VescHwInterface::makeMockStateInterface(const std::string &joint_name, int cmd_index){
-  hardware_interface::JointStateHandle _state_handle(joint_name.c_str(), &rb_pos_[cmd_index], &rb_vel_[cmd_index], &rb_eff_[cmd_index]);
-  joint_state_interface_.registerHandle(_state_handle);
-  registerInterface(&joint_state_interface_);
-
-}
 
 void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period)
 {
   // requests joint states
   // function `packetCallback` will be called after receiving return packets
   // ROS_INFO("***RANDEL: Readi9ng");
+  // vesc_interface_.requestState();
+
+  for (auto &m : motors){
+    if (m.is_mock_){
+      // Don't read from mock motors
+      continue;
+    }
+    if (m.command_mode_ == "velocity")
+    {
+
+      if (m.is_local_){
+        // vesc_interface_.requestState();
+        #if DEBUG_RANDEL == 1
+          fprintf(stderr, "@@@@@@ REQUEST LOCAL state[%d]***\n", m.vesc_id_);
+        #endif // DEBUG_RANDEL
+        vesc_interface_.send(vesc_driver::VescPacketRequestValues(), -1);
+      } else{
+        #if DEBUG_RANDEL == 1
+          fprintf(stderr, "@@@@@@ REQUEST CANBUS state[%d] ***\n", m.vesc_id_);
+        #endif // DEBUG_RANDEL
+        vesc_interface_.send(vesc_driver::VescPacketRequestValues(), m.vesc_id_);
+      }
+    }
+  }
+
+
   /*if (command_mode_ == "position")
   {
     // For PID control, request packets are automatically sent in the control cycle.
@@ -273,7 +200,7 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
     velocity_ = servo_controller_.getVelocitySens();
     effort_ = servo_controller_.getEffortSens();
   }
-  else*/ if (command_mode_ == "velocity_duty")
+  else if (command_mode_ == "velocity_duty")
   {
     p_wheel_pos_[0] = wheel_controller_.getPositionSens();
     p_wheel_vel_[0] = wheel_controller_.getVelocitySens();
@@ -283,14 +210,14 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
   {
     // ROS_INFO("***RANDEL: requesting state!");
     vesc_interface_.requestState();
-  }
+  }*/
 
   // ROS_INFO("***RANDEL: joint: %d", joint_type_);
-  if (joint_type_ == urdf::Joint::REVOLUTE || joint_type_ == urdf::Joint::CONTINUOUS)
-  {
-    p_wheel_pos_[0] = angles::normalize_angle(p_wheel_pos_[0]);
-    // ROS_INFO("***RANDEL: uuuuuu %f", position_);
-  }
+  // if (joint_type_ == urdf::Joint::REVOLUTE || joint_type_ == urdf::Joint::CONTINUOUS)
+  // {
+  //   p_wheel_pos_[0] = angles::normalize_angle(p_wheel_pos_[0]);
+  //   // ROS_INFO("***RANDEL: uuuuuu %f", position_);
+  // }
 
   return;
 }
@@ -298,27 +225,41 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
 void XR1VescHwInterface::write(const ros::Time& time, const ros::Duration& period)
 {
   // sends commands
-  if (command_mode_ == "position")
-  {
-    // Limit the speed using the parameters listed in xacro
-    limit_position_interface_.enforceLimits(period);
+  // auto &m = motors[1];
+  for (auto &m : motors){
+    #if DEBUG_RANDEL == 1
+      fprintf(stderr, "^^^^^^^^^^^^^^ TRYING TO WRITE FOR[%d]***\n", m.vesc_id_);
+    #endif // DEBUG_RANDEL
+    if (m.is_mock_){
+      // Don't write to mock motors
+      continue;
+    }
+    if (m.command_mode_ == "velocity")
+    {
+      m.limit_velocity_interface_.enforceLimits(period);
 
-    // executes PID control
-    servo_controller_.setTargetPosition(cmds_[0]);
+      // converts the velocity unit: rad/s or m/s -> rpm -> erpm
+      const double command_rpm = m.cmd * 60.0 / 2.0 / M_PI / m.gear_ratio_;
+      const double command_erpm = command_rpm * static_cast<double>(m.num_rotor_poles_) / 2;
+
+
+      // fprintf(stderr, "****CMDDDD: %f, %f\n", command_, command_erpm);
+      // sends a reference velocity command
+      if (m.is_local_){
+        // vesc_interface_.setSpeed(command_erpm);
+        #if DEBUG_RANDEL == 1
+          fprintf(stderr, "$$$$$$ SEND LOCAL[%d]***: %f\n", m.vesc_id_, command_erpm);
+        #endif // DEBUG_RANDEL
+        vesc_interface_.send(vesc_driver::VescPacketSetVelocityERPM(command_erpm), -1);
+      } else{
+        #if DEBUG_RANDEL == 1
+          fprintf(stderr, "$$$$$$ SEND CANBUS[%d] ***: %f\n", m.vesc_id_, command_erpm);
+        #endif // DEBUG_RANDEL
+        vesc_interface_.send(vesc_driver::VescPacketSetVelocityERPM(command_erpm), m.vesc_id_);
+      }
+    }
   }
-  else if (command_mode_ == "velocity")
-  {
-    limit_velocity_interface_.enforceLimits(period);
-
-    // converts the velocity unit: rad/s or m/s -> rpm -> erpm
-    const double command_rpm = cmds_[0] * 60.0 / 2.0 / M_PI / gear_ratio_;
-    const double command_erpm = command_rpm * static_cast<double>(num_rotor_poles_) / 2;
-
-
-    // fprintf(stderr, "****CMDDDD: %f, %f\n", command_, command_erpm);
-    // sends a reference velocity command
-    vesc_interface_.setSpeed(command_erpm);
-  }
+  /*
   else if (command_mode_ == "velocity_duty")
   {
     limit_velocity_interface_.enforceLimits(period);
@@ -343,7 +284,7 @@ void XR1VescHwInterface::write(const ros::Time& time, const ros::Duration& perio
 
     // sends a  duty command
     vesc_interface_.setDutyCycle(cmds_[0]);
-  }
+  }*/
   return;
 }
 
@@ -359,25 +300,36 @@ void XR1VescHwInterface::packetCallback(const std::shared_ptr<VescPacket const>&
   {
     ROS_WARN("[XR1VescHwInterface::packetCallback]packetCallcack called, but no packet received");
   }
-  if (command_mode_ == "position")
-  {
-    servo_controller_.updateSensor(packet);
-  }
-  else if (command_mode_ == "velocity_duty")
-  {
-    wheel_controller_.updateSensor(packet);
-  }
-  else if (packet->getName() == "Values")
-  {
+  // RANDEL: DEBUG printout
+  #if DEBUG_RANDEL == 1
+    std::cout << "############## REPLY:\n";
+    for(auto it = packet->getFrame().begin(); it != packet->getFrame().end();  ++it){
+      std::cout << unsigned(*it) << ", ";
+    }
+    std::cout << "\n\n" << std::endl;
+  #endif // DEBUG_RANDEL
+
+  if (packet->getName() == "Values")
+  { 
     std::shared_ptr<VescPacketValues const> values = std::dynamic_pointer_cast<VescPacketValues const>(packet);
+    
+    const uint8_t vesc_id = values->getVescID();
+    auto map_it = idTomotor_ptr_map.find(vesc_id);
+    if (map_it == idTomotor_ptr_map.end()) {
+      // ROS_INFO("VESC ID in reply packet did not match any motors!");
+      fprintf(stderr, "VESC ID[%d] in reply packet did not match any motors!", vesc_id);
+    } else {
+      // found
+      xr1PoweredMotor &motor = *(map_it->second);
+      const double current = values->getMotorCurrent();
+      const double velocity_rpm = values->getVelocityERPM() / static_cast<double>(motor.num_rotor_poles_ / 2);
+      const double steps = values->getPosition();
 
-    const double current = values->getMotorCurrent();
-    const double velocity_rpm = values->getVelocityERPM() / static_cast<double>(num_rotor_poles_ / 2);
-    const double steps = values->getPosition();
+      motor.pos = angles::normalize_angle(steps / (motor.num_hall_sensors_ * motor.num_rotor_poles_) * motor.gear_ratio_);  // unit: rad or m
+      motor.vel = velocity_rpm / 60.0 * 2.0 * M_PI * motor.gear_ratio_;                 // unit: rad/s or m/s
+      motor.eff = current * motor.torque_const_ / motor.gear_ratio_;                    // unit: Nm or N
 
-    p_wheel_pos_[0] = steps / (num_hall_sensors_ * num_rotor_poles_) * gear_ratio_;  // unit: rad or m
-    p_wheel_vel_[0] = velocity_rpm / 60.0 * 2.0 * M_PI * gear_ratio_;                // unit: rad/s or m/s
-    p_wheel_eff_[0] = current * torque_const_ / gear_ratio_;                           // unit: Nm or N
+    }
   }
 
   return;

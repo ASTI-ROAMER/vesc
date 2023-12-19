@@ -245,13 +245,34 @@ void VescInterface::send(const VescPacket& packet, int fwd_address)
   // -1 is assumed as local uart
   if(fwd_address == -1){
     send_no_fwd(packet);
+    
+    #if DEBUG_RANDEL == 1
+      std::cout << "******* DIRECT:\n";
+      for(auto it = packet.getFrame().begin(); it != packet.getFrame().end();  ++it){
+        std::cout << unsigned(*it) << ", ";
+      }
+      std::cout << "\n\n" << std::endl;
+    #endif // DEBUG_RANDEL
+
   } else if (fwd_address < -1 || fwd_address > 255 ){
     // Check if fwd address is within range (one byte 0~255)
     fprintf(stderr, "[VESC ERROR] Can't forward packet to specified address (%d)", fwd_address);
     return;
   } else {
     // Create a new packet by adding CAN forward to the existing packet
-    send_no_fwd(VescPacketFwdToCAN(packet, uint8_t(fwd_address)));
+    VescPacketFwdToCAN fwd_packet(packet, uint8_t(fwd_address));
+
+    #if DEBUG_RANDEL == 1
+      std::cout << "******* FWD:\n";
+      for(auto it = fwd_packet.getFrame().begin(); it != fwd_packet.getFrame().end();  ++it){
+        std::cout << unsigned(*it) << ", ";
+      }
+      std::cout << "\n\n" << std::endl;
+    #endif // DEBUG_RANDEL
+
+    send_no_fwd(fwd_packet);
+
+    // send_no_fwd(VescPacketFwdToCAN(packet, uint8_t(fwd_address)));
   }
 }
 

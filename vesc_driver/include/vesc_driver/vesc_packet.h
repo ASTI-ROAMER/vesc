@@ -197,6 +197,7 @@ public:
   double getPosition() const;
   double getDisplacement() const;
   int getFaultCode() const;
+  uint8_t getVescID() const;
 
 private:
   double readBuffer(const uint8_t, const uint8_t) const;
