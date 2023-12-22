@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(vesc_driver)
 
 add_compile_options(-std=c++11)
-add_compile_definitions(DEBUG_RANDEL=1)
+# add_compile_definitions(DEBUG_RANDEL=1)
 
 find_package(catkin REQUIRED COMPONENTS
   nodelet

@@ -12,13 +12,14 @@
 
   <node name="vesc_hw_interface_node" pkg="vesc_hw_interface" type="xr1_hw_interface_node" output="screen">
     <rosparam>
-      joint_name: wheel_front_left_joint
-      command_mode: velocity
-      joint_type: continuous
       port: /dev/ttyACM0
-      num_rotor_poles: 14
-      gear_ratio: 1.0
-      torque_const: 1
+      register_passive_wheels: true
+      middle_wheel_mimics_front: true
+      strict_motors_check: false
+      id_front_left: 115
+      id_rear_left: 23
+      id_front_right: 127
+      id_rear_right: 67
     </rosparam>
   </node>
 

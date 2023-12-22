@@ -63,7 +63,6 @@ typedef std::pair<Buffer::const_iterator, Buffer::const_iterator> BufferRangeCon
  **/
 class VescFrame
 {
-  friend class VescPacketFwdToCAN;
 public:
   /**
    * @brief Destructor
@@ -111,6 +110,7 @@ private:
   VescFrame(const BufferRangeConst& frame, const BufferRangeConst& payload);
 
   friend class VescPacketFactory;  // gives VescPacketFactory access to private constructor
+  friend class VescPacketFwdToCAN;
 };
 
 /*------------------------------------------------------------------*/
@@ -280,6 +280,7 @@ public:
   explicit VescPacketSetServoPos(double servo_pos);
 };
 
+/*------------------------------------------------------------------*/
 /**
  * @brief packet for forwarding an already constructed packet to a CAN address
  * 
@@ -289,6 +290,57 @@ class VescPacketFwdToCAN : public VescPacket
 public:
   explicit VescPacketFwdToCAN(const VescPacket &packet, uint8_t can_addr);
 };
+
+/*------------------------------------------------------------------*/
+/**
+ * @brief Packet for requesting retrun packets
+ **/
+class VescGetAppConf : public VescPacket
+{
+public:
+  VescGetAppConf();
+};
+
+
+/**
+ * @brief App config reply packet
+ **/
+class VescPacketAppConf : public VescPacket
+{
+public:
+  explicit VescPacketAppConf(std::shared_ptr<VescFrame> raw);
+
+  uint8_t getVescID() const;
+};
+
+/*------------------------------------------------------------------*/
+/**
+ * @brief Packet for requesting retrun packets
+ **/
+class VescPingVescCanIDs : public VescPacket
+{
+public:
+  VescPingVescCanIDs();
+};
+
+
+/**
+ * @brief Reply packet of VESC that contains pinged VESC IDs/can addresses
+ **/
+class VescPacketPingedCanIDs : public VescPacket
+{
+public:
+  explicit VescPacketPingedCanIDs(std::shared_ptr<VescFrame> raw);
+
+  std::vector<uint8_t> vesc_ids;
+
+};
+
+/*------------------------------------------------------------------*/
+
+
+
+
 
 }  // namespace vesc_driver
 

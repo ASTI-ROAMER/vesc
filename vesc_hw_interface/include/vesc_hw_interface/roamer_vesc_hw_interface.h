@@ -22,6 +22,8 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <set>
+#include <array>
 
 #include <angles/angles.h>
 #include <controller_manager/controller_manager.h>
@@ -38,6 +40,7 @@
 #include <urdf_model/types.h>
 #include <urdf_parser/urdf_parser.h>
 #include <pluginlib/class_list_macros.hpp>
+#include <boost/thread/thread.hpp>
 
 #include "vesc_driver/vesc_interface.h"
 #include "vesc_driver/vesc_packet.h"
@@ -52,6 +55,8 @@ namespace vesc_hw_interface
 using vesc_driver::VescInterface;
 using vesc_driver::VescPacket;
 using vesc_driver::VescPacketValues;
+using vesc_driver::VescPacketPingedCanIDs;
+using vesc_driver::VescPacketAppConf;
 
 
 class xr1PoweredMotor
@@ -113,6 +118,7 @@ public:
   // joint_limits_interface::JointLimits joint_limits_;
 };
 
+
 class XR1VescHwInterface : public hardware_interface::RobotHW
 {
 public:
@@ -129,11 +135,16 @@ private:
   VescServoController servo_controller_;
   VescWheelController wheel_controller_;
 
+  int direct_vesc_id_;
+  std::vector<uint8_t> detected_vesc_ids;     // index 0 of this SHOULD BE THE direct_vesc_id_
+  
+
   const std::string motor_names[4] = {"wheel_front_left_joint",
                                       "wheel_rear_left_joint",
                                       "wheel_front_right_joint",
                                       "wheel_rear_right_joint"};
-  const uint8_t motor_vesc_ids[4] = {115, 23, 10, 11};
+  std::array<uint8_t, 4> motor_vesc_ids = {0};
+  
 
   const std::string passive_w_names[2] = {"wheel_middle_left_joint",
                                           "wheel_middle_right_joint"};
@@ -151,15 +162,17 @@ private:
   // leg position sensor: (0)rocker left, (1)bogie left, (2)rocker right, (3)bogie right
   xr1JointSensor rb[4];
 
-
   hardware_interface::JointStateInterface joint_state_interface_;
   hardware_interface::PositionJointInterface joint_position_interface_;
   hardware_interface::VelocityJointInterface joint_velocity_interface_;
   hardware_interface::EffortJointInterface joint_effort_interface_;
+  
 
   void packetCallback(const std::shared_ptr<VescPacket const>&);
   void errorCallback(const std::string&);
   void registerControlInterfaces(ros::NodeHandle& nh_root, ros::NodeHandle& nh);
+
+  uint8_t verifyVescID(int _in, uint8_t _default);
 
 };
 

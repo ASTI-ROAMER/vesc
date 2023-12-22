@@ -115,9 +115,19 @@ VescPacket::VescPacket(const std::string& name, const int16_t payload_size, cons
  **/
 VescPacket::VescPacket(const std::string& name, std::shared_ptr<VescFrame> raw) : VescFrame(*raw), name_(name)
 {
-  uint16_t original_payload_size = std::distance(payload_end_.first, payload_end_.second);
-  payload_end_.first = frame_.begin() + 2;
-  payload_end_.second = std::min(payload_end_.first + original_payload_size, frame_.end());
+  if (VescFrame::VESC_SOF_VAL_SMALL_FRAME == frame_.front())
+  {
+    // payload size field is one byte
+    payload_end_.first = frame_.begin() + 2;
+    payload_end_.second = payload_end_.first + *(frame_.begin() + 1);
+  }
+  else
+  {
+    assert(VescFrame::VESC_SOF_VAL_LARGE_FRAME == frame_.front());
+    // payload size field is two bytes
+    payload_end_.first = frame_.begin() + 3;
+    payload_end_.second = payload_end_.first + (*(frame_.begin() + 1) << 8) + *(frame_.begin() + 2);
+  }
 }
 
 /*------------------------------------------------------------------*/
@@ -528,12 +538,101 @@ VescPacketFwdToCAN::VescPacketFwdToCAN(const VescPacket &packet, uint8_t can_add
   //   std::cout << unsigned(*it) << ", ";
   // }
   // std::cout << "\n\n" << std::endl;
-
-  
-
 }
 
 /*------------------------------------------------------------------*/
+
+/**
+ * @brief Constructor - Request app conf from uart connected vesc
+ **/
+VescGetAppConf::VescGetAppConf() : VescPacket("GetAppConf", 1, COMM_GET_APPCONF)
+{
+  VescFrame::CRC crc_calc;
+  crc_calc.process_bytes(&(*payload_end_.first), boost::distance(payload_end_));
+  uint16_t crc = crc_calc.checksum();
+  *(frame_.end() - 3) = static_cast<uint8_t>(crc >> 8);
+  *(frame_.end() - 2) = static_cast<uint8_t>(crc & 0xFF);
+}
+
+/*------------------------------------------------------------------*/
+/**
+ * @brief Constructor - VESC reply frame for its app conf
+ * @param raw Pointer of VescFrame
+ **/
+VescPacketAppConf::VescPacketAppConf(std::shared_ptr<VescFrame> raw) : VescPacket("AppConf", raw)
+{
+  // #if DEBUG_RANDEL == 1
+  //   std::cout << "############## RAW frame:" << std::endl;
+  //   for(auto it = raw->getFrame().begin(); it != raw->getFrame().end();  ++it){
+  //     std::cout << unsigned(*it) << ", ";
+  //   }
+  //   std::cout << "\n" << std::endl;
+
+  //   // std::cout << "^^^^^^^^^^^^^^ RAW payload:" << std::endl;
+  //   // for(auto it = raw->payload_end_.first; it != raw->payload_end_.second;  ++it){
+  //   //   std::cout << unsigned(*it) << ", ";
+  //   // }
+  //   // std::cout << "\n\n" << std::endl;
+
+  //   std::cout << "&&&&&&&&&&&&&& PROCESSED frame:" << std::endl;
+  //   for(auto it = getFrame().begin(); it != getFrame().end();  ++it){
+  //     std::cout << unsigned(*it) << ", ";
+  //   }
+  //   std::cout << "\n" << std::endl;
+
+  //   std::cout << ">>>>>>>>>>>>>> PROCESSED payload:" << std::endl;
+  //   for(auto it = payload_end_.first; it != payload_end_.second;  ++it){
+  //     std::cout << unsigned(*it) << ", ";
+  //   }
+  //   std::cout << "\n\n" << std::endl;
+  // #endif // DEBUG_RANDEL
+}
+
+uint8_t VescPacketAppConf::getVescID() const
+{
+  return static_cast<uint8_t>(*(payload_end_.first + 5));
+}
+
+/*------------------------------------------------------------------*/
+
+/**
+ * @brief Constructor - Packet for requesting retrun packets
+ * @param raw Pointer of VescFrame
+ **/
+VescPingVescCanIDs::VescPingVescCanIDs() : VescPacket("CmdPingCanIDs", 1, COMM_PING_CAN)
+{
+  VescFrame::CRC crc_calc;
+  crc_calc.process_bytes(&(*payload_end_.first), boost::distance(payload_end_));
+  uint16_t crc = crc_calc.checksum();
+  *(frame_.end() - 3) = static_cast<uint8_t>(crc >> 8);
+  *(frame_.end() - 2) = static_cast<uint8_t>(crc & 0xFF);
+}
+
+
+/*------------------------------------------------------------------*/
+
+/**
+ * @brief Constructor - Reply packet of VESC that contains pinged VESC IDs/can addresses
+ * @param raw Pointer of VescFrame
+ **/
+VescPacketPingedCanIDs::VescPacketPingedCanIDs(std::shared_ptr<VescFrame> raw) : VescPacket("PingedCanIDs", raw)
+{
+  int _count = payload_size() - 1;
+  vesc_ids.reserve(_count);
+  for(auto it = payload_end_.first + 1 ; it != payload_end_.second; ++it){
+    vesc_ids.push_back(*it);
+  }
+
+  
+}
+
+// uint8_t VescPacketPingedCanIDs::getVescID() const
+// {
+//   return static_cast<uint8_t>(*(payload_end_.first + 5));
+// }
+
+/*------------------------------------------------------------------*/
+
 /*
 VescPacketSetDetect::VescPacketSetDetect(uint8_t mode) :
   VescPacket("SetDetect", 3, COMM_SET_DETECT)

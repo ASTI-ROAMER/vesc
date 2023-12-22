@@ -247,7 +247,7 @@ void VescInterface::send(const VescPacket& packet, int fwd_address)
     send_no_fwd(packet);
     
     #if DEBUG_RANDEL == 1
-      std::cout << "******* DIRECT:\n";
+      std::cout << "******* DIRECT SEND:\n";
       for(auto it = packet.getFrame().begin(); it != packet.getFrame().end();  ++it){
         std::cout << unsigned(*it) << ", ";
       }
@@ -263,7 +263,7 @@ void VescInterface::send(const VescPacket& packet, int fwd_address)
     VescPacketFwdToCAN fwd_packet(packet, uint8_t(fwd_address));
 
     #if DEBUG_RANDEL == 1
-      std::cout << "******* FWD:\n";
+      std::cout << "******* FWD SEND:\n";
       for(auto it = fwd_packet.getFrame().begin(); it != fwd_packet.getFrame().end();  ++it){
         std::cout << unsigned(*it) << ", ";
       }
