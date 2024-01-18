@@ -20,7 +20,10 @@ namespace vesc_hw_interface
 {
 XR1VescHwInterface::XR1VescHwInterface()
   : vesc_interface_(std::string(), std::bind(&XR1VescHwInterface::packetCallback, this, std::placeholders::_1),
-                    std::bind(&XR1VescHwInterface::errorCallback, this, std::placeholders::_1)), direct_vesc_id_(-1)
+                    std::bind(&XR1VescHwInterface::errorCallback, this, std::placeholders::_1)), 
+    leg_interface_(std::string(), std::bind(&XR1VescHwInterface::legPacketCallback, this, std::placeholders::_1),
+                    std::bind(&XR1VescHwInterface::legErrorCallback, this, std::placeholders::_1)),
+    direct_vesc_id_(-1), use_only_valid_leg_encoder_values(true)
 {
   detected_vesc_ids.reserve(4);
 }
@@ -31,7 +34,7 @@ XR1VescHwInterface::~XR1VescHwInterface()
 
 bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
 {
-  // reads a port name to open
+  // reads a port name to open     
   std::string port;
   if (!nh.getParam("port", port))
   {
@@ -162,13 +165,6 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
       m.is_mock_ = true;
     }
   }
-  
-
-  // TODO: change this!!
-  // Create interfaces for leg sensors
-  for (int i=0; i < 4; i++){
-    rb[i] = xr1JointSensor(rb_names[i], false, true);
-  }
 
   // Create passive wheels 
   for (int i=0; i < 2; i++){
@@ -176,13 +172,65 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
   }
   
 
-  registerControlInterfaces(nh_root, nh);
+  
   // for (int i=0; i < 4; i++){
   //   fprintf(stderr, "Motor[%d] id: %d\n", i, motors[i].vesc_id_);
   // }
   // **** RANDEL: END new implementation ****************
 
 
+  // *************** RANDEL: leg initialization ****************
+  // reads a port name to open
+  std::string leg_port;
+  if (!nh.getParam("leg_port", leg_port))
+  {
+    ROS_FATAL("[XR1_VESC] Leg Encoders communication port parameter required.");
+    ros::shutdown();
+    return false;
+  }
+
+  // attempts to open the serial port
+  try
+  {
+    leg_interface_.connect(leg_port);
+  }
+  catch (serial::SerialException exception)
+  {
+    ROS_FATAL("[XR1_VESC] Failed to connect to the Leg Encoders, %s.", exception.what());
+    ros::shutdown();
+    return false;
+  }
+  
+  nh.param<bool>("use_only_valid_leg_encoder_values", use_only_valid_leg_encoder_values, true);
+  nh.param<std::string>("leg0_joint_name", rb_names[0], "rocker_left_joint");
+  nh.param<std::string>("leg1_joint_name", rb_names[1], "bogie_left_joint");
+  nh.param<std::string>("leg2_joint_name", rb_names[2], "rocker_right_joint");
+  nh.param<std::string>("leg3_joint_name", rb_names[3], "bogie_right_joint");
+
+  // TODO: change this!!
+  // Create interfaces for leg sensors
+  int temp_zero_val = 0;
+  bool temp_reversed = false;
+  for (int i=0; i < 4; i++){
+    auto param_name1 = "leg" + std::to_string(i) + "_zero_enc_val";           // e.g.: leg0_zero_enc_val
+    nh.param<int>(param_name1, temp_zero_val, 0);
+    auto param_name2 = "leg" + std::to_string(i) + "_reverse_dir";           // e.g.: leg0_reverse_dir
+    nh.param<bool>(param_name2, temp_reversed, false);
+
+    // Check zero encoder value if within limits
+    if(temp_zero_val < 0 || temp_zero_val > xr1JointSensor::MAX_ENCODER_VAL){
+      ROS_FATAL("[XR1_VESC] Parameter [%s] must be between [0, %d]", param_name1.c_str(), xr1JointSensor::MAX_ENCODER_VAL);
+      ros::shutdown();
+      return false;
+    }
+    ROS_INFO("Leg[%d]: joint_name=%s enc_zero_val=%d, dir=%s", i, rb_names[i].c_str(), temp_zero_val, temp_reversed ? "REVERSED" : "FORWARDS");
+
+    rb[i] = xr1JointSensor(rb_names[i], temp_zero_val, temp_reversed);
+  }
+
+
+  // **** register interfaces
+  registerControlInterfaces(nh_root, nh);
   return true;
 }
 
@@ -221,7 +269,7 @@ void XR1VescHwInterface::registerControlInterfaces(ros::NodeHandle& nh_root, ros
 
   // REGISTER LEG SENSORS
   for (auto &s : rb){
-    hardware_interface::JointStateHandle _state_handle(s.joint_name_.c_str(), &(s.pos), &(s.vel), &(s.vel));
+    hardware_interface::JointStateHandle _state_handle(s.joint_name_.c_str(), &(s.pos), &(s.vel), &(s.eff));
     joint_state_interface_.registerHandle(_state_handle);
   }
 
@@ -257,6 +305,10 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
   // ROS_INFO("***RANDEL: Readi9ng");
   // vesc_interface_.requestState();
 
+  
+  #if DEBUG_RANDEL == 1
+    fprintf(stderr, "@@@@@@ requesting VESC motor stats ***\n");
+  #endif // DEBUG_RANDEL
   for (auto &m : motors){
     if (m.is_mock_){
       // Don't read from mock motors
@@ -277,6 +329,15 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
         vesc_interface_.send(vesc_driver::VescPacketRequestValues(), m.vesc_id_);
       }
     }
+  }
+
+  #if DEBUG_RANDEL == 1
+    fprintf(stderr, "@@@@@@ requesting leg enc ***\n");
+  #endif // DEBUG_RANDEL
+  if (use_only_valid_leg_encoder_values){
+    leg_interface_.send(vesc_driver::LegReqAllPosStatus(), -1);
+  } else{
+    leg_interface_.send(vesc_driver::LegReqAllPos(), -1);
   }
 
   // fprintf(stderr, "@@@@@@ GET APPCONF ***\n");
@@ -444,6 +505,95 @@ void XR1VescHwInterface::packetCallback(const std::shared_ptr<VescPacket const>&
 }
 
 void XR1VescHwInterface::errorCallback(const std::string& error)
+{
+  ROS_ERROR("%s", error.c_str());
+  return;
+}
+
+
+void XR1VescHwInterface::legPacketCallback(const std::shared_ptr<VescPacket const>& packet)
+{
+  // ROS_INFO("***RANDEL: legpacketCallback CALLED!!!");
+  if (!leg_interface_.isRxDataUpdated())
+  {
+    ROS_WARN("[XR1VescHwInterface::legPacketCallback] called, but no packet received");
+  }
+
+  // RANDEL: DEBUG printout
+  #if DEBUG_RANDEL == 1
+    std::cout << "############## RAW REPLY("<< packet->getName() << "):\n";
+    for(auto it = packet->getFrame().begin(); it != packet->getFrame().end();  ++it){
+      std::cout << unsigned(*it) << ", ";
+    }
+    std::cout << "\n\n" << std::endl;
+  #endif // DEBUG_RANDEL
+
+  if (*(packet->payload_end_.first) == COMM_LEG_ALL_POS){
+    #if DEBUG_RANDEL == 1
+      fprintf(stderr, "** LEG rcv frame: \n");
+      for(auto it = packet->frame_.begin() ; it != packet->frame_.end() ;  ++it){
+        fprintf(stderr, " %02x", (unsigned char)(*it));
+      }
+      fprintf(stderr, "\n\n");
+    #endif // DEBUG_RANDEL
+    
+    for(int i=0; i < 4; i++){
+      const uint8_t hbyte = (uint8_t)(*(packet->payload_end_.first + 1 + (2 *i)));
+      const uint8_t lbyte = (uint8_t)(*(packet->payload_end_.first + 2 + (2 *i)));
+      const uint16_t enc_val = ((uint16_t)hbyte << 8) | (uint16_t)lbyte;
+      rb[i].isEncUpToDate = 1;
+      rb[i].enc_val = enc_val;
+      rb[i].get_final_pos_from_enc();
+      
+      #if DEBUG_RANDEL == 1
+        double rad_a = angles::normalize_angle(enc_val * 2 * M_PI / 4095.0);
+        fprintf(stderr, "------\n");
+        fprintf(stderr, "[%d]hbyte: %02x\n", i, hbyte);
+        fprintf(stderr, "[%d]lbyte: %02x\n", i, lbyte);
+        fprintf(stderr, "[%d]raw_encval: %04x (%d dec) (%f rad)\n", i, enc_val, enc_val, rad_a);
+        fprintf(stderr, "[%d]processed(z %d): zeroed: %d,  zd: %d,  final: %frad\n", i, rb[i].enc_zero_val, rb[i].zeroed_enc_val(), rb[i].zeroed_dir_enc_val(), rb[i].final_pos_rad());
+      #endif // DEBUG_RANDEL
+    } 
+
+  } else if (*(packet->payload_end_.first) == COMM_LEG_ALL_POS_STATUS){
+    #if DEBUG_RANDEL == 1
+      fprintf(stderr, "** LEG rcv frame: \n");
+      for(auto it = packet->frame_.begin() ; it != packet->frame_.end() ;  ++it){
+        fprintf(stderr, " %02x", (unsigned char)(*it));
+      }
+      fprintf(stderr, "\n\n");
+    #endif // DEBUG_RANDEL
+    
+    for(int i=0; i < 4; i++){
+      const uint8_t hbyte = (uint8_t)(*(packet->payload_end_.first + 1 + (2 *i)));
+      const uint8_t lbyte = (uint8_t)(*(packet->payload_end_.first + 2 + (2 *i)));
+      const uint8_t status = (uint8_t)(*(packet->payload_end_.first + 3 + (2 *i)));
+      const uint16_t enc_val = ((uint16_t)hbyte << 8) | (uint16_t)lbyte;
+
+      // If the status is 0, save the received encoder value, BUT DON'T update the position.
+      rb[i].isEncUpToDate = status;
+      rb[i].enc_val = enc_val;
+      if (rb[i].isEncUpToDate){
+        rb[i].get_final_pos_from_enc();
+      }
+      
+      #if DEBUG_RANDEL == 1
+        double rad_a = angles::normalize_angle(enc_val * 2 * M_PI / 4095.0);
+        fprintf(stderr, "------\n");
+        fprintf(stderr, "[%d]hbyte: %02x\n", i, hbyte);
+        fprintf(stderr, "[%d]lbyte: %02x\n", i, lbyte);
+        fprintf(stderr, "[%d]status: %02x, isEncUpToDate: %d\n", i, status, rb[i].isEncUpToDate);
+        fprintf(stderr, "[%d]raw_encval: %04x (%d dec) (%f rad)\n", i, enc_val, enc_val, rad_a);
+        fprintf(stderr, "[%d]processed(z %d): zeroed: %d,  zd: %d,  final: %frad\n", i, rb[i].enc_zero_val, rb[i].zeroed_enc_val(), rb[i].zeroed_dir_enc_val(), rb[i].final_pos_rad());
+      #endif // DEBUG_RANDEL
+    }
+  }
+  
+
+  return;
+}
+
+void XR1VescHwInterface::legErrorCallback(const std::string& error)
 {
   ROS_ERROR("%s", error.c_str());
   return;

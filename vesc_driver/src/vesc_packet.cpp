@@ -647,4 +647,40 @@ VescPacketSetDetect::VescPacketSetDetect(uint8_t mode) :
 }
 */
 
+/*------------------------------------------------------------------*/
+/**
+ * @brief Constructor
+ **/
+VescPacketGeneric::VescPacketGeneric(std::shared_ptr<VescFrame> raw) : VescPacket("GenericPacket", raw)
+{
+  
+}
+
+/*------------------------------------------------------------------*//**
+ * @brief Constructor
+ **/
+LegReqAllPos::LegReqAllPos() : VescPacket("LegAllPos", 1, COMM_LEG_ALL_POS)
+{
+  VescFrame::CRC crc_calc;
+  crc_calc.process_bytes(&(*payload_end_.first), boost::distance(payload_end_));
+  uint16_t crc = crc_calc.checksum();
+  *(frame_.end() - 3) = static_cast<uint8_t>(crc >> 8);
+  *(frame_.end() - 2) = static_cast<uint8_t>(crc & 0xFF);
+}
+
+
+/*------------------------------------------------------------------*//**
+ * @brief Constructor
+ **/
+LegReqAllPosStatus::LegReqAllPosStatus() : VescPacket("LegAllPos", 1, COMM_LEG_ALL_POS_STATUS)
+{
+  VescFrame::CRC crc_calc;
+  crc_calc.process_bytes(&(*payload_end_.first), boost::distance(payload_end_));
+  uint16_t crc = crc_calc.checksum();
+  *(frame_.end() - 3) = static_cast<uint8_t>(crc >> 8);
+  *(frame_.end() - 2) = static_cast<uint8_t>(crc & 0xFF);
+}
+
+/*------------------------------------------------------------------*/
+
 }  // namespace vesc_driver

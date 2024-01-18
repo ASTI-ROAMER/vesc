@@ -135,6 +135,12 @@ VescPacketPtr VescPacketFactory::createPacket(const Buffer::const_iterator& begi
 
   // checks whether the end-of-frame character is valid
   if (VescFrame::VESC_EOF_VAL != *iter_eof)
+    // fprintf(stderr, "^^^^^^ end-of-frame: \n");
+    // for(auto it = begin ; it != iter_eof ;  ++it){
+    //   fprintf(stderr, " %02x", (unsigned char)(*it));
+    // }
+    // fprintf(stderr, " %02x", (unsigned char)(*iter_eof));
+    // std::cout << std::endl;
     return createFailed(num_bytes_needed, what, "Invalid end-of-frame character");
 
   // checks whether the crc is valid
@@ -160,8 +166,9 @@ VescPacketPtr VescPacketFactory::createPacket(const Buffer::const_iterator& begi
     }
     else
     {
-      // no subclass constructor for this packet
-      return createFailed(num_bytes_needed, what, "Unkown payload type.");
+      return VescPacketPtr(new VescPacketGeneric(raw_frame));
+      // // no subclass constructor for this packet
+      // return createFailed(num_bytes_needed, what, "Unkown payload type.");
     }
   }
   else

@@ -24,6 +24,7 @@
 #include <map>
 #include <set>
 #include <array>
+#include <string>
 
 #include <angles/angles.h>
 #include <controller_manager/controller_manager.h>
@@ -47,6 +48,8 @@
 #include "vesc_driver/vesc_packet_factory.h"
 #include "vesc_hw_interface/vesc_servo_controller.h"
 #include "vesc_hw_interface/vesc_wheel_controller.h"
+
+#include "vesc_driver/data_map_leg_encoder.h"
 
 // #define DEBUG_RANDEL 0
 
@@ -98,9 +101,11 @@ public:
 class xr1JointSensor
 {
 public:
+  static const int MAX_ENCODER_VAL=4095;
   xr1JointSensor(){};
-  xr1JointSensor(std::string joint_name, int local=false, int mock=false): 
-      joint_type_(urdf::Joint::CONTINUOUS), joint_name_(joint_name), is_local_(local), is_mock_(mock),
+  xr1JointSensor(std::string joint_name, uint16_t enc_zero_val_=0, bool reversed_=false): 
+      joint_type_(urdf::Joint::CONTINUOUS), joint_name_(joint_name),
+      dir_val(reversed_ ? -1 : 1), enc_zero_val(enc_zero_val_),enc_val(enc_zero_val), isEncUpToDate(0),
       pos(0.0),  vel(0.0), eff(0.0),
       gear_ratio_(1.0) {};
   ~xr1JointSensor(){};
@@ -108,12 +113,45 @@ public:
   int joint_type_;
   std::string joint_name_;
   
-  int is_local_, is_mock_;
+
 
   // stuff for commands for ros control
-  double pos, vel, eff;          // command, position, velocity, effort
+  int16_t dir_val;
+  uint16_t enc_zero_val, enc_val;               // 0 radians encoder value, 12-bit encoder value
+  uint8_t isEncUpToDate;                 // 0 if not updated, due to unreadable spi values
+  double pos, vel, eff;               // command, position, velocity, effort
 
   double gear_ratio_;
+
+  void setReversedDir(){
+    dir_val = -1;
+  }
+  void setForwardDir(){
+    dir_val = 1;
+  }
+
+  void setEncoderZeroValue(int zero_val){
+    enc_zero_val = (uint16_t)zero_val;
+  }
+
+  int16_t zeroed_enc_val(){
+    int16_t temp = (int16_t)enc_val - (int16_t)enc_zero_val;
+    return temp > 0 ? temp : (int16_t)(MAX_ENCODER_VAL+temp);   // temp in false is negative
+  };
+
+  // zeroed and dir corrected encoder value
+  int16_t zeroed_dir_enc_val(){
+    return zeroed_enc_val() * dir_val;
+  };
+
+  // zeroed and normalized angle (pos) in radians
+  double final_pos_rad(){
+    return angles::normalize_angle(zeroed_dir_enc_val() * 2 * M_PI / MAX_ENCODER_VAL);
+  };
+
+  void get_final_pos_from_enc(){
+    pos = final_pos_rad();
+  };
 
   // joint_limits_interface::JointLimits joint_limits_;
 };
@@ -132,6 +170,7 @@ public:
 
 private:
   VescInterface vesc_interface_;
+  VescInterface leg_interface_;
   VescServoController servo_controller_;
   VescWheelController wheel_controller_;
 
@@ -149,10 +188,10 @@ private:
   const std::string passive_w_names[2] = {"wheel_middle_left_joint",
                                           "wheel_middle_right_joint"};
 
-  const std::string rb_names[4] = { "rocker_left_joint",
-                                    "bogie_left_joint",
-                                    "rocker_right_joint",
-                                    "bogie_right_joint"};
+  std::string rb_names[4] = {   "rocker_left_joint",
+                                "bogie_left_joint",
+                                "rocker_right_joint",
+                                "bogie_right_joint"};
   // 4 actuators: (0)front-left, (1)rear-left, (2)front-right, (3)rear-right
   xr1PoweredMotor motors[4];
   xr1PoweredMotor passive_wheels[2];
@@ -161,6 +200,7 @@ private:
 
   // leg position sensor: (0)rocker left, (1)bogie left, (2)rocker right, (3)bogie right
   xr1JointSensor rb[4];
+  bool use_only_valid_leg_encoder_values;
 
   hardware_interface::JointStateInterface joint_state_interface_;
   hardware_interface::PositionJointInterface joint_position_interface_;
@@ -170,6 +210,10 @@ private:
 
   void packetCallback(const std::shared_ptr<VescPacket const>&);
   void errorCallback(const std::string&);
+
+  void legPacketCallback(const std::shared_ptr<VescPacket const>&);
+  void legErrorCallback(const std::string&);
+
   void registerControlInterfaces(ros::NodeHandle& nh_root, ros::NodeHandle& nh);
 
   uint8_t verifyVescID(int _in, uint8_t _default);

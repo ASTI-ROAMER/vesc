@@ -51,6 +51,7 @@
 #include <boost/range/end.hpp>
 
 #include "vesc_driver/data_map.h"
+#include "vesc_driver/data_map_leg_encoder.h"
 
 namespace vesc_driver
 {
@@ -98,6 +99,7 @@ public:
 protected:
   explicit VescFrame(const int16_t payload_size);
 
+public:
   Buffer frame_;
   // Stores frame data
 
@@ -338,8 +340,40 @@ public:
 
 /*------------------------------------------------------------------*/
 
+/**
+ * @brief Packet for requesting position of all leg encoders
+ **/
+
+class VescPacketGeneric : public VescPacket
+{
+public:
+  explicit VescPacketGeneric(std::shared_ptr<VescFrame> raw);
+};
+/*------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------*/
+
+/**
+ * @brief Packet for requesting position of all leg encoders
+ **/
+class LegReqAllPos : public VescPacket
+{
+public:
+  LegReqAllPos();
+};
 
 
+/*------------------------------------------------------------------*/
+
+/**
+ * @brief Packet for requesting position of all leg encoders
+ **/
+class LegReqAllPosStatus : public VescPacket
+{
+public:
+  LegReqAllPosStatus();
+};
+/*------------------------------------------------------------------*/
 
 
 }  // namespace vesc_driver

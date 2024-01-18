@@ -12,14 +12,30 @@
 
   <node name="vesc_hw_interface_node" pkg="vesc_hw_interface" type="xr1_hw_interface_node" output="screen">
     <rosparam>
-      port: /dev/ttyACM0
+      port: /dev/ttyACM1
       register_passive_wheels: true
-      middle_wheel_mimics_front: true
+      middle_wheel_mimics_front: false
       strict_motors_check: false
       id_front_left: 115
       id_rear_left: 23
       id_front_right: 127
       id_rear_right: 67
+
+      leg_port: /dev/ttyACM0
+      use_only_valid_leg_encoder_values: false
+      leg0_joint_name: "bogie_left_joint"
+      leg1_joint_name: "rocker_left_joint"
+      leg2_joint_name: "rocker_right_joint"
+      leg3_joint_name: "bogie_right_joint"
+      leg0_zero_enc_val: 0
+      leg1_zero_enc_val: 0
+      leg2_zero_enc_val: 0
+      leg3_zero_enc_val: 0
+      leg0_reverse_dir: false
+      leg1_reverse_dir: false
+      leg2_reverse_dir: false
+      leg3_reverse_dir: false
+      
     </rosparam>
   </node>
 
