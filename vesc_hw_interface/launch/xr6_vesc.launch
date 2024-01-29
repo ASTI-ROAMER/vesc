@@ -21,20 +21,23 @@
       id_front_right: 127
       id_rear_right: 67
 
+
       leg_port: /dev/ttyACM0
-      use_only_valid_leg_encoder_values: false
-      leg0_joint_name: "bogie_left_joint"
-      leg1_joint_name: "rocker_left_joint"
-      leg2_joint_name: "rocker_right_joint"
-      leg3_joint_name: "bogie_right_joint"
-      leg0_zero_enc_val: 0
-      leg1_zero_enc_val: 0
-      leg2_zero_enc_val: 0
-      leg3_zero_enc_val: 0
-      leg0_reverse_dir: false
-      leg1_reverse_dir: false
-      leg2_reverse_dir: false
-      leg3_reverse_dir: false
+      use_only_valid_leg_encoder_values: true
+
+      rocker_left_joint_name: "rocker_left_joint"
+      rocker_right_joint_name: "rocker_right_joint"
+      rocker_zero_enc_val: 0
+      rocker_reverse_dir: false
+
+      bogie_left_joint_name: "bogie_left_joint"
+      bogie_left_zero_enc_val: 0
+      bogie_left_reverse_dir: false
+
+      bogie_right_joint_name: "bogie_right_joint"
+      bogie_right_zero_enc_val: 0
+      bogie_right_reverse_dir: false
+
       
     </rosparam>
   </node>

@@ -27,20 +27,27 @@
   - If true, it will only update the position of the leg joint if it is updated/valid (encoder values will still be copied, but joint position will not be calculated).
   - If false, it will not request the status of individual encoders.
   - ex.: use_only_valid_leg_encoder_values: false
-- leg{$index}_joint_name (string, ["rocker_left_joint", "bogie_left_joint", "rocker_right_joint", "bogie_right_joint"])
-  - Specify a name for each {$index} (0-3) of the joint associated with each encoder value
-  - ex.: leg0_joint_name: "bogie_left_joint"
-  - ex.: leg1_joint_name: "rocker_left_joint"
-  - ex.: leg2_joint_name: "rocker_right_joint"
-  - ex.: leg3_joint_name: "bogie_right_joint"
-- leg{$index}_zero_enc_val (int, [0, 0, 0, 0]) - Specifies the encoder value for zero degrees for each {$index}.
-  - ex.: leg0_zero_enc_val: 0
-  - ex.: leg1_zero_enc_val: 0
-  - ex.: leg2_zero_enc_val: 0
-  - ex.: leg3_zero_enc_val: 0
-- leg0_reverse_dir (bool, false) - Specifies whether to reverse the joint position (enc_val*-1) calculated from the encoder values
-  - ex.: leg0_reverse_dir: false
-  - ex.: leg1_reverse_dir: false
-  - ex.: leg2_reverse_dir: false
-  - ex.: leg3_reverse_dir: false
+
+#### for rocker joints (1 encoder to 2 joints, complementary)
+- rocker_left_joint_name (string, "rocker_left_joint"): See below.
+- rocker_right_joint_name (string, "rocker_right_joint"): Name of the left/ right rocker joint.
+- rocker_zero_enc_val (int, 0): Specifies the encoder value for zero degrees. Left and right joint position are complementary, coming only from 1 encoder value. This affects LEFT ROCKER directly. Should be below 12 bits (max 4095).
+- rocker_reverse_dir (bool, false): Specifies whether to reverse the joint position (enc_val*-1) calculated from the encoder values. Left and right joint position are complementary, coming only from 1 encoder value. This affects LEFT ROCKER directly.
+
+#### for bogie joints (1 encoder to 1 joint, normal)
+- bogie_left_joint_name (string, "bogie_left_joint"): Specify a name for the left bogie joint.
+  - ex.: bogie_left_joint_name: "bogie_left_joint"
+- bogie_left_zero_enc_val (int, 0): Specifies the encoder value for zero degrees for bogie_left_joint. Should be below 12 bits (max 4095)
+  - ex.: bogie_left_zero_enc_val: 23
+- bogie_left_reverse_dir (bool, false): Specifies whether to reverse the position (negate) for the joint.
+  - ex.: bogie_left_reverse_dir: false
+
+- bogie_right_joint_name (string, "bogie_right_joint"): Specify a name for the right bogie joint.
+  - ex.: bogie_right_joint_name: "bogie_right_joint"
+- bogie_right_zero_enc_val (int, 0): Specifies the encoder value for zero degrees for bogie_right_joint. Should be below 12 bits (max 4095)
+  - ex.: bogie_right_zero_enc_val: 23
+- bogie_right_reverse_dir (bool, false): Specifies whether to reverse the position (negate) for the joint.
+  - ex.: bogie_right_reverse_dir: false
+
+
       

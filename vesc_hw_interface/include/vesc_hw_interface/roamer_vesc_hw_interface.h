@@ -149,7 +149,7 @@ public:
     return angles::normalize_angle(zeroed_dir_enc_val() * 2 * M_PI / MAX_ENCODER_VAL);
   };
 
-  void get_final_pos_from_enc(){
+  virtual void update_final_pos_from_enc(){
     pos = final_pos_rad();
   };
 
@@ -157,9 +157,33 @@ public:
 };
 
 
+class xr1JCompelemtaryJointSensor : public xr1JointSensor
+{
+  public:
+  xr1JCompelemtaryJointSensor() : xr1JointSensor() {};
+  xr1JCompelemtaryJointSensor(std::string joint_name, std::string joint_name2, uint16_t enc_zero_val_=0, bool reversed_=false): 
+      xr1JointSensor(joint_name, enc_zero_val_, reversed_),
+      joint_name_2(joint_name2),
+      pos2(0.0),  vel2(0.0), eff2(0.0) {};
+  ~xr1JCompelemtaryJointSensor(){};
+
+  std::string joint_name_2;
+  double pos2, vel2, eff2;    // negative version of pos, vel, eff
+
+  void update_final_pos_from_enc() override {
+    pos = final_pos_rad();
+    pos2 = -pos;
+  };
+};
+
+
 class XR1VescHwInterface : public hardware_interface::RobotHW
 {
 public:
+  // Initialize these static members below (outside class)
+  static const std::vector<std::string> DEFAULT_COMP_JOINT_NAMES;
+  static const std::vector<std::string> DEFAULT_NORM_JOINT_NAMES;
+
   XR1VescHwInterface();
   ~XR1VescHwInterface();
 
@@ -188,18 +212,17 @@ private:
   const std::string passive_w_names[2] = {"wheel_middle_left_joint",
                                           "wheel_middle_right_joint"};
 
-  std::string rb_names[4] = {   "rocker_left_joint",
-                                "bogie_left_joint",
-                                "rocker_right_joint",
-                                "bogie_right_joint"};
+
   // 4 actuators: (0)front-left, (1)rear-left, (2)front-right, (3)rear-right
   xr1PoweredMotor motors[4];
   xr1PoweredMotor passive_wheels[2];
 
   std::map<uint8_t, xr1PoweredMotor*> idTomotor_ptr_map;
 
-  // leg position sensor: (0)rocker left, (1)bogie left, (2)rocker right, (3)bogie right
-  xr1JointSensor rb[4];
+
+  xr1JCompelemtaryJointSensor comp_joints_;       // rocker left and right joints
+  xr1JointSensor normal_joints_[2];               // bogie left and right joints
+
   bool use_only_valid_leg_encoder_values;
 
   hardware_interface::JointStateInterface joint_state_interface_;
@@ -219,6 +242,8 @@ private:
   uint8_t verifyVescID(int _in, uint8_t _default);
 
 };
+const std::vector<std::string> XR1VescHwInterface::DEFAULT_COMP_JOINT_NAMES({"rocker_left_joint", "rocker_right_joint"});
+const std::vector<std::string> XR1VescHwInterface::DEFAULT_NORM_JOINT_NAMES({"bogie_left_joint", "bogie_right_joint"});
 
 
 

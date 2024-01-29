@@ -170,12 +170,6 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
   for (int i=0; i < 2; i++){
     passive_wheels[i] = xr1PoweredMotor(passive_w_names[i], "velocity", i+10, false, true);
   }
-  
-
-  
-  // for (int i=0; i < 4; i++){
-  //   fprintf(stderr, "Motor[%d] id: %d\n", i, motors[i].vesc_id_);
-  // }
   // **** RANDEL: END new implementation ****************
 
 
@@ -202,31 +196,42 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
   }
   
   nh.param<bool>("use_only_valid_leg_encoder_values", use_only_valid_leg_encoder_values, true);
-  nh.param<std::string>("leg0_joint_name", rb_names[0], "rocker_left_joint");
-  nh.param<std::string>("leg1_joint_name", rb_names[1], "bogie_left_joint");
-  nh.param<std::string>("leg2_joint_name", rb_names[2], "rocker_right_joint");
-  nh.param<std::string>("leg3_joint_name", rb_names[3], "bogie_right_joint");
 
-  // TODO: change this!!
-  // Create interfaces for leg sensors
-  int temp_zero_val = 0;
-  bool temp_reversed = false;
-  for (int i=0; i < 4; i++){
-    auto param_name1 = "leg" + std::to_string(i) + "_zero_enc_val";           // e.g.: leg0_zero_enc_val
-    nh.param<int>(param_name1, temp_zero_val, 0);
-    auto param_name2 = "leg" + std::to_string(i) + "_reverse_dir";           // e.g.: leg0_reverse_dir
-    nh.param<bool>(param_name2, temp_reversed, false);
 
-    // Check zero encoder value if within limits
-    if(temp_zero_val < 0 || temp_zero_val > xr1JointSensor::MAX_ENCODER_VAL){
-      ROS_FATAL("[XR1_VESC] Parameter [%s] must be between [0, %d]", param_name1.c_str(), xr1JointSensor::MAX_ENCODER_VAL);
-      ros::shutdown();
-      return false;
-    }
-    ROS_INFO("Leg[%d]: joint_name=%s enc_zero_val=%d, dir=%s", i, rb_names[i].c_str(), temp_zero_val, temp_reversed ? "REVERSED" : "FORWARDS");
+  // Setup rocker joints (complementary joints, only one encoder value )
+  std::string temp_joint_name, temp_joint_name2;
+  int temp_zero_val=0, temp_zero_val2=0;
+  bool temp_reversed=false, temp_reversed2=false;
 
-    rb[i] = xr1JointSensor(rb_names[i], temp_zero_val, temp_reversed);
+  nh.param<std::string>("rocker_left_joint_name", temp_joint_name, DEFAULT_COMP_JOINT_NAMES[0]);
+  nh.param<std::string>("rocker_right_joint_name", temp_joint_name2, DEFAULT_COMP_JOINT_NAMES[1]);
+  nh.param<int>("rocker_zero_enc_val", temp_zero_val, 0);
+  nh.param<bool>("rocker_reverse_dir", temp_reversed, false);
+  if(temp_zero_val < 0 || temp_zero_val > xr1JCompelemtaryJointSensor::MAX_ENCODER_VAL){
+    ROS_FATAL("[XR1_VESC] Parameter [%s] must be between [0, %d], value=%d", "comp_leg1_joint_name", xr1JCompelemtaryJointSensor::MAX_ENCODER_VAL, temp_zero_val);
+    ros::shutdown();
+    return false;
   }
+  ROS_INFO("[XR1_VESC] Rocker joints: joint_names=[%s, %s] enc_zero_val=%d, dir=%s", temp_joint_name.c_str(), temp_joint_name2.c_str(), temp_zero_val, temp_reversed ? "REVERSED" : "FORWARDS");
+  comp_joints_ = xr1JCompelemtaryJointSensor(temp_joint_name, temp_joint_name2, temp_zero_val, temp_reversed);
+
+  // Setup bogie joints (normal joints, one encoder value for each joint)
+  nh.param<std::string>("bogie_left_joint_name", temp_joint_name, DEFAULT_NORM_JOINT_NAMES[0]);
+  nh.param<int>("bogie_left_zero_enc_val", temp_zero_val, 0);
+  nh.param<bool>("bogie_left_reverse_dir", temp_reversed, false);
+  nh.param<std::string>("bogie_right_joint_name", temp_joint_name2, DEFAULT_NORM_JOINT_NAMES[1]);
+  nh.param<int>("bogie_right_zero_enc_val", temp_zero_val2, 0);
+  nh.param<bool>("bogie_right_reverse_dir", temp_reversed2, false);
+  if(temp_zero_val < 0 || temp_zero_val > xr1JCompelemtaryJointSensor::MAX_ENCODER_VAL ||
+      temp_zero_val2 < 0 || temp_zero_val2 > xr1JCompelemtaryJointSensor::MAX_ENCODER_VAL){
+    ROS_FATAL("[XR1_VESC] Parameter [%s] must be between [0, %d], values=(%d, %d)", "bogie_right/left_zero_enc_val", xr1JCompelemtaryJointSensor::MAX_ENCODER_VAL, temp_zero_val, temp_zero_val2);
+    ros::shutdown();
+    return false;
+  }
+  ROS_INFO("[XR1_VESC] Bogie left joint: joint_name=[%s] enc_zero_val=%d, dir=%s", temp_joint_name.c_str(), temp_zero_val, temp_reversed ? "REVERSED" : "FORWARDS");
+  ROS_INFO("[XR1_VESC] Bogie right joint: joint_name=[%s] enc_zero_val=%d, dir=%s", temp_joint_name2.c_str(), temp_zero_val2, temp_reversed2 ? "REVERSED" : "FORWARDS");
+  normal_joints_[0] = xr1JointSensor(temp_joint_name, temp_zero_val, temp_reversed);
+  normal_joints_[1] = xr1JointSensor(temp_joint_name2, temp_zero_val2, temp_reversed2);
 
 
   // **** register interfaces
@@ -268,8 +273,14 @@ void XR1VescHwInterface::registerControlInterfaces(ros::NodeHandle& nh_root, ros
   }
 
   // REGISTER LEG SENSORS
-  for (auto &s : rb){
-    hardware_interface::JointStateHandle _state_handle(s.joint_name_.c_str(), &(s.pos), &(s.vel), &(s.eff));
+  // For rocker
+  hardware_interface::JointStateHandle _state_handle(comp_joints_.joint_name_.c_str(), &(comp_joints_.pos), &(comp_joints_.vel), &(comp_joints_.eff));
+  joint_state_interface_.registerHandle(_state_handle);
+  hardware_interface::JointStateHandle _state_handle2(comp_joints_.joint_name_2.c_str(), &(comp_joints_.pos2), &(comp_joints_.vel2), &(comp_joints_.eff2));
+  joint_state_interface_.registerHandle(_state_handle2);
+  // For bogie
+  for (auto &norm_joint : normal_joints_){
+    hardware_interface::JointStateHandle _state_handle(norm_joint.joint_name_.c_str(), &(norm_joint.pos), &(norm_joint.vel), &(norm_joint.eff));
     joint_state_interface_.registerHandle(_state_handle);
   }
 
@@ -537,13 +548,21 @@ void XR1VescHwInterface::legPacketCallback(const std::shared_ptr<VescPacket cons
       fprintf(stderr, "\n\n");
     #endif // DEBUG_RANDEL
     
-    for(int i=0; i < 4; i++){
+    // IMPORTANT! Arduino outputs 3 data chunks. These 3 chunks maps to our 4 leg joint as:
+    // *** rocker joint is only 1 object but contains both left and right rocker joints, as it only needs 1 encoder value for 2 joint positions
+    //  rocker_joints = arduino_chunk[0]        
+    //  bogie_left_joint = arduino_chunk[1]
+    //  bogie_right_joint = arduino_chunk[2]
+
+    xr1JointSensor* temp_j_ptrs[] = {static_cast<xr1JointSensor*>(&comp_joints_), &(normal_joints_[0]), &(normal_joints_[1])};
+    for(int i=0; i < 3; i++){
       const uint8_t hbyte = (uint8_t)(*(packet->payload_end_.first + 1 + (2 *i)));
       const uint8_t lbyte = (uint8_t)(*(packet->payload_end_.first + 2 + (2 *i)));
       const uint16_t enc_val = ((uint16_t)hbyte << 8) | (uint16_t)lbyte;
-      rb[i].isEncUpToDate = 1;
-      rb[i].enc_val = enc_val;
-      rb[i].get_final_pos_from_enc();
+
+      temp_j_ptrs[i]->isEncUpToDate = 1;
+      temp_j_ptrs[i]->enc_val = enc_val;
+      temp_j_ptrs[i]->update_final_pos_from_enc();
       
       #if DEBUG_RANDEL == 1
         double rad_a = angles::normalize_angle(enc_val * 2 * M_PI / 4095.0);
@@ -551,7 +570,7 @@ void XR1VescHwInterface::legPacketCallback(const std::shared_ptr<VescPacket cons
         fprintf(stderr, "[%d]hbyte: %02x\n", i, hbyte);
         fprintf(stderr, "[%d]lbyte: %02x\n", i, lbyte);
         fprintf(stderr, "[%d]raw_encval: %04x (%d dec) (%f rad)\n", i, enc_val, enc_val, rad_a);
-        fprintf(stderr, "[%d]processed(z %d): zeroed: %d,  zd: %d,  final: %frad\n", i, rb[i].enc_zero_val, rb[i].zeroed_enc_val(), rb[i].zeroed_dir_enc_val(), rb[i].final_pos_rad());
+        fprintf(stderr, "[%d]processed(z %d): zeroed: %d,  zd: %d,  final: %frad\n", i, temp_j_ptrs[i]->enc_zero_val, temp_j_ptrs[i]->zeroed_enc_val(), temp_j_ptrs[i]->zeroed_dir_enc_val(), temp_j_ptrs[i]->final_pos_rad());
       #endif // DEBUG_RANDEL
     } 
 
@@ -563,30 +582,37 @@ void XR1VescHwInterface::legPacketCallback(const std::shared_ptr<VescPacket cons
       }
       fprintf(stderr, "\n\n");
     #endif // DEBUG_RANDEL
-    
-    for(int i=0; i < 4; i++){
-      const uint8_t hbyte = (uint8_t)(*(packet->payload_end_.first + 1 + (2 *i)));
-      const uint8_t lbyte = (uint8_t)(*(packet->payload_end_.first + 2 + (2 *i)));
-      const uint8_t status = (uint8_t)(*(packet->payload_end_.first + 3 + (2 *i)));
+
+    // IMPORTANT! Arduino outputs 3 data chunks. These 3 chunks maps to our 4 leg joint as:
+    // *** rocker joint is only 1 object but contains both left and right rocker joints, as it only needs 1 encoder value for 2 joint positions
+    //  rocker_joints = arduino_chunk[0]        
+    //  bogie_left_joint = arduino_chunk[1]
+    //  bogie_right_joint = arduino_chunk[2]
+
+    xr1JointSensor* temp_j_ptrs[] = {static_cast<xr1JointSensor*>(&comp_joints_), &(normal_joints_[0]), &(normal_joints_[1])};
+    for(int i=0; i < 3; i++){
+      const uint8_t hbyte = (uint8_t)(*(packet->payload_end_.first + 1 + (3 *i)));
+      const uint8_t lbyte = (uint8_t)(*(packet->payload_end_.first + 2 + (3 *i)));
+      const uint8_t status = (uint8_t)(*(packet->payload_end_.first + 3 + (3 *i)));
       const uint16_t enc_val = ((uint16_t)hbyte << 8) | (uint16_t)lbyte;
 
-      // If the status is 0, save the received encoder value, BUT DON'T update the position.
-      rb[i].isEncUpToDate = status;
-      rb[i].enc_val = enc_val;
-      if (rb[i].isEncUpToDate){
-        rb[i].get_final_pos_from_enc();
+      temp_j_ptrs[i]->isEncUpToDate = status;
+      temp_j_ptrs[i]->enc_val = enc_val;
+      if (temp_j_ptrs[i]->isEncUpToDate){
+        temp_j_ptrs[i]->update_final_pos_from_enc();
       }
-      
+      // if(i==0)
+      // fprintf(stderr, "*** [%d]processed(zv %d): zeroed: %d,  zd: %d,  final: %frad, r:%d, s:%d, rr:%d\n", i, temp_j_ptrs[i]->enc_zero_val, temp_j_ptrs[i]->zeroed_enc_val(), temp_j_ptrs[i]->zeroed_dir_enc_val(), temp_j_ptrs[i]->final_pos_rad(), temp_j_ptrs[i]->enc_val, temp_j_ptrs[i]->isEncUpToDate, enc_val);
       #if DEBUG_RANDEL == 1
         double rad_a = angles::normalize_angle(enc_val * 2 * M_PI / 4095.0);
         fprintf(stderr, "------\n");
         fprintf(stderr, "[%d]hbyte: %02x\n", i, hbyte);
         fprintf(stderr, "[%d]lbyte: %02x\n", i, lbyte);
-        fprintf(stderr, "[%d]status: %02x, isEncUpToDate: %d\n", i, status, rb[i].isEncUpToDate);
+        fprintf(stderr, "[%d]status: %02x, isEncUpToDate: %d\n", i, status, temp_j_ptrs[i]->isEncUpToDate);
         fprintf(stderr, "[%d]raw_encval: %04x (%d dec) (%f rad)\n", i, enc_val, enc_val, rad_a);
-        fprintf(stderr, "[%d]processed(z %d): zeroed: %d,  zd: %d,  final: %frad\n", i, rb[i].enc_zero_val, rb[i].zeroed_enc_val(), rb[i].zeroed_dir_enc_val(), rb[i].final_pos_rad());
+        fprintf(stderr, "[%d]processed(z %d): zeroed: %d,  zd: %d,  final: %frad\n", i, temp_j_ptrs[i]->enc_zero_val, temp_j_ptrs[i]->zeroed_enc_val(), temp_j_ptrs[i]->zeroed_dir_enc_val(), temp_j_ptrs[i]->final_pos_rad());
       #endif // DEBUG_RANDEL
-    }
+    } 
   }
   
 
