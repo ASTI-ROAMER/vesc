@@ -84,7 +84,14 @@ enum PACKET_MAP
   TACHOMETER = 45,
   TACHOMETER_ABS = 49,
   FAULT_CODE = 53,
+  PID_POS_NOW = 54,
   VESC_ID = 58,
+  TEMP_MOS1 = 59,
+  TEMP_MOS2 = 61,
+  TEMP_MOS3 = 63,
+  VD_AVE = 65,
+  VQ_AVE = 69,
+
 };
 
 #endif  // VESC_DRIVER_DATA_MAP_H_

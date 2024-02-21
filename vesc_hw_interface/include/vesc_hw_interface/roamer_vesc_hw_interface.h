@@ -51,6 +51,8 @@
 
 #include "vesc_driver/data_map_leg_encoder.h"
 
+// #include "vesc_hw_interface/xr1_diagnostics.h"
+
 // #define DEBUG_RANDEL 0
 
 namespace vesc_hw_interface
@@ -69,7 +71,8 @@ public:
   xr1PoweredMotor(std::string joint_name, std::string command_mode, uint8_t vesc_id, int local=false, int mock=false): 
       joint_type_(urdf::Joint::CONTINUOUS), joint_name_(joint_name), command_mode_(command_mode), vesc_id_(vesc_id), is_local_(local), is_mock_(mock),
       cmd(0.0), pos(0.0),  vel(0.0), eff(0.0),
-      num_rotor_poles_(14), num_hall_sensors_(3), gear_ratio_(1.0), torque_const_(1.0), screw_lead_(1.0) {};
+      num_rotor_poles_(14), num_hall_sensors_(3), gear_ratio_(1.0), torque_const_(1.0), screw_lead_(1.0),
+      mc_last_update_time(0.0) {};
   ~xr1PoweredMotor(){};
 
   int joint_type_;
@@ -85,6 +88,71 @@ public:
   int num_hall_sensors_;              // the number of hall sensors
   double gear_ratio_, torque_const_;  // physical params
   double screw_lead_;                 // linear distance (m) of 1 revolution
+
+  // motor stats
+  ros::Time mc_last_update_time;
+
+  double mc_temp_fet_filtered_ = 0.0;                 // filtered MOSFET temperature
+  double mc_temp_motor_filtered_ = 0.0;               // filtered motor temperature
+  double mc_motor_current_ = 0.0;                     // average motor current
+  double mc_input_current_ = 0.0;                     // average input current
+  double mc_current_direct_axis_ = 0.0;               // average D axis current
+  double mc_current_quadrature_axis_ = 0.0;           // average Q axis current
+  double mc_duty_cycle_now_ = 0.0;                    // the duty cycle now
+  double mc_erpm_ = 0.0;                              // current ERPM (different from RPM!!)
+  double mc_voltage_in_ = 0.0;                        // input voltage
+  double mc_amp_hours_ = 0.0;                         // the amount of amp hours drawn from the input source
+  double mc_amp_hours_charged_ = 0.0;                 // the amount of amp hours fed back into the input source
+  double mc_watt_hours_ = 0.0;                        // the amount of watt hours drawn from the input source
+  double mc_watt_hours_charged_ = 0.0;                // the amount of watt hours fed back into the input source
+  int mc_tachometer_ = 0;                             // tachometer value / position
+  int mc_tachometer_abs_ = 0;                         // abs tachometer value / displacement
+  int mc_fault_code_ = 0;                             // fault code
+  double mc_pid_pos_now_ = 0.0;                       // the position of pid, in float degrees
+  uint8_t mc_controller_vesc_id_ = 0;                 // the controller vesc ID where the values CAME FROM
+  double mc_ntc_temp_mos1_ = 0.0;                     // The NTC temperature of mosfet 1
+  double mc_ntc_temp_mos2_ = 0.0;                     // The NTC temperature of mosfet 2
+  double mc_ntc_temp_mos3_ = 0.0;                     // The NTC temperature of mosfet 2
+  double mc_avg_vd = 0.0;                             // The average Direct axis voltage.
+  double mc_avg_vq = 0.0;                             // The average Quadrature axis voltage.
+
+  void extract_packet_values(std::shared_ptr<VescPacketValues const> &pckt_vals){
+    mc_temp_fet_filtered_ = pckt_vals->getMosTemp();
+    mc_temp_motor_filtered_ = pckt_vals->getMotorTemp();
+    mc_motor_current_ = pckt_vals->getMotorCurrent();
+    mc_input_current_ = pckt_vals->getInputCurrent();
+    mc_current_direct_axis_ = pckt_vals->getDirectAxisCurrent();
+    mc_current_quadrature_axis_ = pckt_vals->getQuadratureAxisCurrent();
+    mc_duty_cycle_now_ = pckt_vals->getDuty();
+    mc_erpm_ = pckt_vals->getVelocityERPM();
+    mc_voltage_in_ = pckt_vals->getInputVoltage();
+    mc_amp_hours_ = pckt_vals->getConsumedCharge();
+    mc_amp_hours_charged_ = pckt_vals->getInputCharge();
+    mc_watt_hours_ = pckt_vals->getConsumedPower();
+    mc_watt_hours_charged_ = pckt_vals->getInputPower();
+    mc_tachometer_ = pckt_vals->getPosition();
+    mc_tachometer_abs_ = pckt_vals->getDisplacement();
+    mc_fault_code_ = pckt_vals->getFaultCode();
+    mc_pid_pos_now_ = pckt_vals->getPIDPosNow();
+    mc_controller_vesc_id_ = pckt_vals->getVescID();
+    mc_ntc_temp_mos1_ = pckt_vals->getTempMos1();
+    mc_ntc_temp_mos2_ = pckt_vals->getTempMos2();
+    mc_ntc_temp_mos3_ = pckt_vals->getTempMos3();
+    mc_avg_vd = pckt_vals->getAveDirectAxisVoltage();
+    mc_avg_vq = pckt_vals->getAveQuadratureAxisVoltage();
+
+    mc_last_update_time = ros::Time::now();
+  };
+
+  void update_pos_vel_eff_from_pckt_vals(){
+    pos = angles::normalize_angle(mc_tachometer_ / (num_hall_sensors_ * num_rotor_poles_) * gear_ratio_);  // unit: rad or m
+    vel = mc_erpm_ / 60.0 * 2.0 * M_PI * gear_ratio_;                         // unit: rad/s or m/s
+    eff = mc_motor_current_ * torque_const_ / gear_ratio_;                    // unit: Nm or N
+
+    // std::cout << "**********v"<< int(vesc_id_) <<":" << vel << std::endl;
+  };
+
+
 
   joint_limits_interface::JointLimits joint_limits_;
   joint_limits_interface::PositionJointSaturationInterface limit_position_interface_;
@@ -240,6 +308,16 @@ private:
   void registerControlInterfaces(ros::NodeHandle& nh_root, ros::NodeHandle& nh);
 
   uint8_t verifyVescID(int _in, uint8_t _default);
+
+
+  // // Diagnostics
+  // ros::Publisher diagnostic_publisher_;
+  // husky_msgs::HuskyStatus husky_status_msg_;
+  // diagnostic_updater::Updater diagnostic_updater_;
+  // XR1HardwareDiagnosticTask<clearpath::DataSystemStatus> system_status_task_;
+  // XR1HardwareDiagnosticTask<clearpath::DataPowerSystem> power_status_task_;
+  // XR1HardwareDiagnosticTask<clearpath::DataSafetySystemStatus> safety_status_task_;
+  // XR1HardwareDiagnosticTask software_status_task_;
 
 };
 const std::vector<std::string> XR1VescHwInterface::DEFAULT_COMP_JOINT_NAMES({"rocker_left_joint", "rocker_right_joint"});

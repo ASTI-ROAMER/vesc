@@ -189,6 +189,8 @@ public:
   double getMotorTemp() const;
   double getMotorCurrent() const;
   double getInputCurrent() const;
+  double getDirectAxisCurrent() const;
+  double getQuadratureAxisCurrent() const;
   double getVelocityERPM() const;
   double getInputVoltage() const;
   double getDuty() const;
@@ -199,7 +201,13 @@ public:
   double getPosition() const;
   double getDisplacement() const;
   int getFaultCode() const;
+  double getPIDPosNow() const;
   uint8_t getVescID() const;
+  double getTempMos1() const;
+  double getTempMos2() const;
+  double getTempMos3() const;
+  double getAveDirectAxisVoltage() const;
+  double getAveQuadratureAxisVoltage() const;
 
 private:
   double readBuffer(const uint8_t, const uint8_t) const;

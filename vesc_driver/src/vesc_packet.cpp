@@ -218,6 +218,24 @@ double VescPacketValues::getInputCurrent() const
 }
 
 /**
+ * @brief Gets input current
+ * @return Input current
+ **/
+double VescPacketValues::getDirectAxisCurrent() const
+{
+  return readBuffer(ID, 4) / 100.0;
+}
+
+/**
+ * @brief Gets input current
+ * @return Input current
+ **/
+double VescPacketValues::getQuadratureAxisCurrent() const
+{
+  return readBuffer(IQ, 4) / 100.0;
+}
+
+/**
  * @brief Gets the current duty value
  * @return The current duty value
  **/
@@ -272,7 +290,7 @@ double VescPacketValues::getInputCharge() const
 
 /**
  * @brief Gets consumed power
- * @return Consumed power
+ * @return The amount of watt hours drawn. / Consumed power.
  **/
 double VescPacketValues::getConsumedPower() const
 {
@@ -281,11 +299,11 @@ double VescPacketValues::getConsumedPower() const
 
 /**
  * @brief Gets input power
- * @return Input power
+ * @return The amount of watt hours fed back.
  **/
 double VescPacketValues::getInputPower() const
 {
-  return readBuffer(WATT_HOURS, 4) / 10000.0;
+  return readBuffer(WATT_HOURS_CHARGED, 4) / 10000.0;
 }
 
 /**
@@ -317,12 +335,67 @@ int VescPacketValues::getFaultCode() const
 
 
 /**
+ * @brief Gets the position of pid, in float degrees.
+ * @return The position of pid
+ **/
+double VescPacketValues::getPIDPosNow() const
+{
+  return readBuffer(PID_POS_NOW, 4) / 1000000.0;
+}
+
+
+/**
  * @brief Gets VESC ID where the packet came from
  * @return uint8_t vesc id
  **/
 uint8_t VescPacketValues::getVescID() const
 {
   return static_cast<uint8_t>(*(payload_end_.first + VESC_ID));
+}
+
+/**
+ * @brief Gets NTC temperature of mosfet 1.
+ * @return The NTC temperature of mosfet 1
+ **/
+double VescPacketValues::getTempMos1() const
+{
+  return readBuffer(TEMP_MOS1, 4) / 10.0;
+}
+
+/**
+ * @brief Gets NTC temperature of mosfet 2.
+ * @return The NTC temperature of mosfet 2
+ **/
+double VescPacketValues::getTempMos2() const
+{
+  return readBuffer(TEMP_MOS2, 4) / 10.0;
+}
+
+/**
+ * @brief Gets NTC temperature of mosfet 3.
+ * @return The NTC temperature of mosfet 3
+ **/
+double VescPacketValues::getTempMos3() const
+{
+  return readBuffer(TEMP_MOS3, 4) / 10.0;
+}
+
+/**
+ * @brief Gets the average direct axis motor voltage. (FOC only)
+ * @return The average D axis voltage.
+ **/
+double VescPacketValues::getAveDirectAxisVoltage() const
+{
+  return readBuffer(VD_AVE, 4) / 1000.0;
+}
+
+/**
+ * @brief Gets the average quadrature axis motor voltage. (FOC only)
+ * @return The average Q axis voltage.
+ **/
+double VescPacketValues::getAveQuadratureAxisVoltage() const
+{
+  return readBuffer(VQ_AVE, 4) / 1000.0;
 }
 
 /**

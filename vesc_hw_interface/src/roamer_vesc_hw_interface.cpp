@@ -383,7 +383,7 @@ void XR1VescHwInterface::write(const ros::Time& time, const ros::Duration& perio
       const double command_erpm = command_rpm * static_cast<double>(m.num_rotor_poles_) / 2;
 
 
-      // fprintf(stderr, "****CMDDDD: %f, %f\n", command_, command_erpm);
+      // fprintf(stderr, "****CMD[%d]: %f, %f, %f\n", m.vesc_id_, m.cmd, command_rpm, command_erpm);
       // sends a reference velocity command
       if (m.is_local_){
         // vesc_interface_.setSpeed(command_erpm);
@@ -399,6 +399,7 @@ void XR1VescHwInterface::write(const ros::Time& time, const ros::Duration& perio
       }
     }
   }
+  // fprintf(stderr, "--------------------\n\n");
   /*
   else if (command_mode_ == "velocity_duty")
   {
@@ -462,13 +463,20 @@ void XR1VescHwInterface::packetCallback(const std::shared_ptr<VescPacket const>&
     } else {
       // found
       xr1PoweredMotor &motor = *(map_it->second);
-      const double current = values->getMotorCurrent();
-      const double velocity_rpm = values->getVelocityERPM() / static_cast<double>(motor.num_rotor_poles_ / 2);
-      const double steps = values->getPosition();
+      motor.extract_packet_values(values);
+      motor.update_pos_vel_eff_from_pckt_vals();
 
-      motor.pos = angles::normalize_angle(steps / (motor.num_hall_sensors_ * motor.num_rotor_poles_) * motor.gear_ratio_);  // unit: rad or m
-      motor.vel = velocity_rpm / 60.0 * 2.0 * M_PI * motor.gear_ratio_;                 // unit: rad/s or m/s
-      motor.eff = current * motor.torque_const_ / motor.gear_ratio_;                    // unit: Nm or N
+      // const double current = values->getMotorCurrent();
+      // const double velocity_rpm = values->getVelocityERPM() / static_cast<double>(motor.num_rotor_poles_ / 2);
+      // const double steps = values->getPosition();
+
+      // motor.pos = angles::normalize_angle(steps / (motor.num_hall_sensors_ * motor.num_rotor_poles_) * motor.gear_ratio_);  // unit: rad or m
+      // motor.vel = velocity_rpm / 60.0 * 2.0 * M_PI * motor.gear_ratio_;                 // unit: rad/s or m/s
+      // motor.eff = current * motor.torque_const_ / motor.gear_ratio_;                    // unit: Nm or N
+
+
+      // PRINTING stats
+      
 
       // if(motor.joint_name_ == "wheel_rear_left_joint"){
       //   std::cout << "******* pvRe:" << motor.pos << ", " << motor.vel << ", " << values->getVelocityERPM()<< ", " << motor.eff << ", " << std::endl;
