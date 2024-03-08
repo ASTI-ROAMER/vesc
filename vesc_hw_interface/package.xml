@@ -17,6 +17,7 @@
   <depend>pluginlib</depend>
   <depend>urdf</depend>
   <depend>vesc_driver</depend>
+  <depend>diagnostic_updater</depend>
 
   <export>
     <hardware_interface plugin="${prefix}/vesc_hw_interface_plugin.xml"/>

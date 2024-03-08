@@ -1,0 +1,7 @@
+analyzers:
+  husky:
+    type: diagnostic_aggregator/GenericAnalyzer
+    path: XR11
+    find_and_remove_prefix: 'vesc_hw_interface_node: '
+    expected: ['vesc_hw_interface_node: system_status', 'vesc_hw_interface_node: motors_status', 'vesc_hw_interface_node: encoder_status', 'vesc_hw_interface_node: power_status', ]
+    timeout: 5.0

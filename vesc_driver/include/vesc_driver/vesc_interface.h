@@ -137,6 +137,8 @@ public:
   void setPosition(double position);
   void setServo(double servo);
 
+  std::string port_name;
+
 private:
   // Pimpl - hide serial port members from class users
   class Impl;

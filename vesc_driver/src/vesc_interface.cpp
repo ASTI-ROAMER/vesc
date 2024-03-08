@@ -145,7 +145,7 @@ void* VescInterface::Impl::rxThread(void)
 
 VescInterface::VescInterface(const std::string& port, const PacketHandlerFunction& packet_handler,
                              const ErrorHandlerFunction& error_handler)
-  : impl_(new Impl())
+  : port_name(port), impl_(new Impl())
 {
   setPacketHandler(packet_handler);
   setErrorHandler(error_handler);
