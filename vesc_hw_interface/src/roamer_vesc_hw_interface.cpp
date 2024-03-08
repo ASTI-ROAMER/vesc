@@ -34,6 +34,9 @@ XR1VescHwInterface::~XR1VescHwInterface()
 
 bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
 {
+  nh.param<bool>("debug_no_device", DEBUG_NO_DEVICE, false);
+  
+  if(!DEBUG_NO_DEVICE){              // no uart devices connected
   // reads a port name to open     
   std::string port;
   if (!nh.getParam("port", port))
@@ -81,6 +84,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
       break;
     }
   }
+  } //DEBUG_NO_DEVICE
 
 
   // **** RANDEL: START new implementation ****************
@@ -139,6 +143,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     // ROS_INFO("joint type: %s", motors[i].joint_type_);
   }
 
+  if(!DEBUG_NO_DEVICE){              // no uart devices connected
   // Find the local motor
   try{
     auto &m = *idTomotor_ptr_map.at(uint8_t(direct_vesc_id_));
@@ -148,6 +153,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     ros::shutdown();
     return false;
   }
+  } //DEBUG_NODEVICE
 
   // If we are strict, all given IDs should be found with CANBUS/UART
   bool _strict_all_ids;
@@ -156,7 +162,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     if(std::find(detected_vesc_ids.begin(), detected_vesc_ids.end(), m.vesc_id_) != detected_vesc_ids.end()) {
         ROS_INFO("[XR1_VESC] Motor ID [%d] is connected", m.vesc_id_);
     } else {
-      if(_strict_all_ids){
+      if(_strict_all_ids && !DEBUG_NO_DEVICE){
         ROS_FATAL("[XR1_VESC] Using {strict_all_ids}, ID [%d] was not found! EXITING...", m.vesc_id_);
         ros::shutdown();
         return false;
@@ -184,6 +190,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
   }
 
   // attempts to open the serial port
+  if(!DEBUG_NO_DEVICE){              // no uart devices connected
   try
   {
     leg_interface_.connect(leg_port);
@@ -194,6 +201,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     ros::shutdown();
     return false;
   }
+  } //DEBUG_NO_DEVICE
   
   nh.param<bool>("use_only_valid_leg_encoder_values", use_only_valid_leg_encoder_values, true);
 
@@ -233,6 +241,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
   normal_joints_[0] = xr1JointSensor(temp_joint_name, temp_zero_val, temp_reversed);
   normal_joints_[1] = xr1JointSensor(temp_joint_name2, temp_zero_val2, temp_reversed2);
 
+  initDiagnostics();
 
   // **** register interfaces
   registerControlInterfaces(nh_root, nh);
@@ -316,7 +325,7 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
   // ROS_INFO("***RANDEL: Readi9ng");
   // vesc_interface_.requestState();
 
-  
+  if(!DEBUG_NO_DEVICE){              // no uart devices connected
   #if DEBUG_RANDEL == 1
     fprintf(stderr, "@@@@@@ requesting VESC motor stats ***\n");
   #endif // DEBUG_RANDEL
@@ -350,6 +359,7 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
   } else{
     leg_interface_.send(vesc_driver::LegReqAllPos(), -1);
   }
+  } //DEBUG_NO_DEVICE
 
   // fprintf(stderr, "@@@@@@ GET APPCONF ***\n");
   // vesc_interface_.send(vesc_driver::VescGetAppConf(), -1);
@@ -357,7 +367,7 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
   // fprintf(stderr, "@@@@@@ CMD PING CAN IDs ***\n");
   // vesc_interface_.send(vesc_driver::VescPingVescCanIDs(), -1);
 
-
+  diagnostic_updater_.update();
 
   return;
 }
@@ -366,6 +376,8 @@ void XR1VescHwInterface::write(const ros::Time& time, const ros::Duration& perio
 {
   // sends commands
   // auto &m = motors[1];
+
+  if(!DEBUG_NO_DEVICE){              // no uart devices connected
   for (auto &m : motors){
     #if DEBUG_RANDEL == 1
       fprintf(stderr, "^^^^^^^^^^^^^^ TRYING TO WRITE FOR[%d]***\n", m.vesc_id_);
@@ -399,6 +411,7 @@ void XR1VescHwInterface::write(const ros::Time& time, const ros::Duration& perio
       }
     }
   }
+  } //DEBUG_NO_DEVICE
   // fprintf(stderr, "--------------------\n\n");
   /*
   else if (command_mode_ == "velocity_duty")
@@ -437,10 +450,13 @@ ros::Time XR1VescHwInterface::getTime() const
 void XR1VescHwInterface::packetCallback(const std::shared_ptr<VescPacket const>& packet)
 {
   // ROS_INFO("***RANDEL: packetCallback CALLED!!!");
+
+  if(!DEBUG_NO_DEVICE){              // no uart devices connected
   if (!vesc_interface_.isRxDataUpdated())
   {
     ROS_WARN("[XR1VescHwInterface::packetCallback]packetCallcack called, but no packet received");
   }
+  } //DEBUG_NO_DEVICE
 
   // RANDEL: DEBUG printout
   #if DEBUG_RANDEL == 1
@@ -533,10 +549,12 @@ void XR1VescHwInterface::errorCallback(const std::string& error)
 void XR1VescHwInterface::legPacketCallback(const std::shared_ptr<VescPacket const>& packet)
 {
   // ROS_INFO("***RANDEL: legpacketCallback CALLED!!!");
+  if(!DEBUG_NO_DEVICE){              // no uart devices connected
   if (!leg_interface_.isRxDataUpdated())
   {
     ROS_WARN("[XR1VescHwInterface::legPacketCallback] called, but no packet received");
   }
+  } //DEBUG_NO_DEVICE
 
   // RANDEL: DEBUG printout
   #if DEBUG_RANDEL == 1
@@ -642,6 +660,151 @@ uint8_t XR1VescHwInterface::verifyVescID(int _in, uint8_t _default){
     return _default;
   }
 }
+
+
+// ==============================================================================================
+// ===================================== Diagnostics ============================================
+void XR1VescHwInterface::initDiagnostics(){
+  diagnostic_updater_.setHardwareID("XR11");
+  diagnostic_updater_.add("system_status", this, &XR1VescHwInterface::xr1_hw_system_updater);
+  diagnostic_updater_.add("motors_status", this, &XR1VescHwInterface::xr1_hw_motors_updater);
+  diagnostic_updater_.add("encoder_status", this, &XR1VescHwInterface::xr1_hw_encoders_updater);
+  diagnostic_updater_.add("power_status", this, &XR1VescHwInterface::xr1_power_system_updater);
+  diagnostic_updater_.add("safety_status", this, &XR1VescHwInterface::xr1_safety_system_updater);
+
+  diagnostic_updater_.force_update();
+}
+
+
+void XR1VescHwInterface::xr1_hw_system_updater(diagnostic_updater::DiagnosticStatusWrapper &stat){
+  stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "System Status OK!");
+
+  double total_vesc_cur_ = motors[0].mc_input_current_ + motors[1].mc_input_current_ + motors[2].mc_input_current_ + motors[3].mc_input_current_;
+  double left_vesc_cur_ = motors[0].mc_input_current_ + motors[1].mc_input_current_;
+  double right_vesc_cur_ = motors[2].mc_input_current_ + motors[3].mc_input_current_;
+  
+  stat.add("VESC UART port:", vesc_interface_.port_name);
+  stat.add("Encoder UART port:", leg_interface_.port_name);
+  stat.add("Total VESC Drivers Current", total_vesc_cur_);
+  stat.add("Left VESC Dual Driver Current", left_vesc_cur_);
+  stat.add("Right VESC Dual Driver Current", right_vesc_cur_);
+
+  if(!DEBUG_NO_DEVICE){
+    if(!leg_interface_.isConnected()){
+      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "Leg encoder UART port not connected!!");
+    }
+    if(!vesc_interface_.isConnected()){
+      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "VESC UART port not connected!!");
+    }
+  
+
+    if((left_vesc_cur_ > xr1PoweredMotor::MAX_DUAL_VESC_CURRENT) 
+      || (right_vesc_cur_ > xr1PoweredMotor::MAX_DUAL_VESC_CURRENT)){
+        stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "VESC dual driver max fuse current reached!!");
+    }
+
+    if(total_vesc_cur_ > xr1PoweredMotor::MAX_TOTAL_VESC_CURRENT) {
+        stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "Total VESC driver max fuse current reached!!");
+    }
+
+    if (!(comp_joints_.isEncUpToDate && normal_joints_[0].isEncUpToDate && normal_joints_[1].isEncUpToDate)){
+      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::WARN, "At least 1 of the leg joint encoders is not updated!");
+    }
+  }
+
+  
+}
+
+
+void XR1VescHwInterface::xr1_hw_motors_updater(diagnostic_updater::DiagnosticStatusWrapper &stat){
+  stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "Motors System OK!");
+  
+  stat.add("F Left Motor Current (A)", motors[0].mc_motor_current_);
+  stat.add("R Left Motor Current (A)", motors[1].mc_motor_current_);
+  stat.add("F Right Motor Current (A)", motors[2].mc_motor_current_);
+  stat.add("R Right Motor Current (A)", motors[3].mc_motor_current_);
+
+  stat.add("F Left Input Current (A)", motors[0].mc_input_current_);
+  stat.add("R Left Input Current (A)", motors[1].mc_input_current_);
+  stat.add("F Right Input Current (A)", motors[2].mc_input_current_);
+  stat.add("R Right Input Current (A)", motors[3].mc_input_current_);
+
+  stat.add("F Left Motor Input Voltage (V)", motors[0].mc_voltage_in_);
+  stat.add("R Left Motor Input Voltage (V)", motors[1].mc_voltage_in_);
+  stat.add("F Right Motor Input Voltage (V)", motors[2].mc_voltage_in_);
+  stat.add("R Right Motor Input Voltage (V)", motors[3].mc_voltage_in_);
+  
+  stat.add("F Left Motor Temp (C)", motors[0].mc_temp_motor_filtered_);
+  stat.add("R Left Motor Temp (C)", motors[1].mc_temp_motor_filtered_);
+  stat.add("F Right Motor Temp (C)", motors[2].mc_temp_motor_filtered_);
+  stat.add("R Right Motor Temp (C)", motors[3].mc_temp_motor_filtered_);
+
+  stat.add("F Left Fault Code", motors[0].mc_fault_code_);
+  stat.add("R Left Fault Code", motors[1].mc_fault_code_);
+  stat.add("F Right Fault Code", motors[2].mc_fault_code_);
+  stat.add("R Right Fault Code", motors[3].mc_fault_code_);
+
+  stat.add("F Left FET Temp (C)", motors[0].mc_temp_fet_filtered_);
+  stat.add("R Left FET Temp (C)", motors[1].mc_temp_fet_filtered_);
+  stat.add("F Right FET Temp (C)", motors[2].mc_temp_fet_filtered_);
+  stat.add("R Right FET Temp (C)", motors[3].mc_temp_fet_filtered_);
+
+  for (auto &m : motors){
+    if(m.mc_motor_current_ > 20.0){
+      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::WARN, "A motor driver reached max current!");
+      break;
+    }
+
+    if(m.mc_fault_code_){
+      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::WARN, "A motor driver has a fault!");
+      break;
+    }
+
+    if(m.mc_temp_motor_filtered_ > 85.0){
+      if(m.mc_temp_motor_filtered_ > 1000.0){
+        stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::WARN, "Erratically high motor temp. Possibly a disconnected hall sensor cable.");
+        break;
+      }
+      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::WARN, "A motor driver reached max temperature!");
+      break;
+    }
+  }
+}
+
+
+void XR1VescHwInterface::xr1_hw_encoders_updater(diagnostic_updater::DiagnosticStatusWrapper &stat){
+  stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "Encoders System OK!");
+
+  stat.add("Middle Encoder (L+R Rocker) Status", bool(comp_joints_.isEncUpToDate));
+  stat.add("Left Bogie Status", bool(normal_joints_[0].isEncUpToDate));
+  stat.add("Right Bogie Status", bool(normal_joints_[1].isEncUpToDate));
+  
+  if(!DEBUG_NO_DEVICE){
+    if (!(comp_joints_.isEncUpToDate && normal_joints_[0].isEncUpToDate && normal_joints_[1].isEncUpToDate)){
+      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::WARN, "At least 1 of the leg joint encoders is not updated (Possibly disconnected cable)!");
+    }
+  }
+}
+
+void XR1VescHwInterface::xr1_power_system_updater(diagnostic_updater::DiagnosticStatusWrapper &stat){
+  stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "Power System OK!");
+  double total_AH_drawn = motors[0].mc_amp_hours_ + motors[1].mc_amp_hours_ + motors[2].mc_amp_hours_ + motors[3].mc_amp_hours_;
+  double total_WH_drawn = motors[0].mc_watt_hours_ + motors[1].mc_watt_hours_ + motors[2].mc_watt_hours_ + motors[3].mc_watt_hours_;
+  stat.add("Total Amp-hours Drawn (AH)", total_AH_drawn);
+  stat.add("Total Watt-hours Drawn (WH)", total_WH_drawn);
+
+}
+
+void XR1VescHwInterface::xr1_safety_system_updater(diagnostic_updater::DiagnosticStatusWrapper &stat){
+  stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "Safety System OK!");
+  stat.add("DUMMY Tineout", true);
+  stat.add("DUMMY Lockout", true);
+  stat.add("DUMMY Emergency Stop", true);
+  stat.add("DUMMY No Battery", true);
+  stat.add("DUMMY Current Limit", false);
+
+}
+
 
 }  // namespace vesc_hw_interface
 

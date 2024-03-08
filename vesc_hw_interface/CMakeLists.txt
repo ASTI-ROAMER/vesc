@@ -15,6 +15,7 @@ find_package(
              pluginlib
              urdf
              vesc_driver
+             diagnostic_updater
 )
 
 catkin_package(
@@ -44,6 +45,7 @@ add_library(
   src/vesc_wheel_controller.cpp
   src/vesc_step_difference.cpp
   src/roamer_vesc_hw_interface.cpp
+  src/xr1_actuator_sensor_container.cpp
 )
 add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})

@@ -12,6 +12,7 @@
 
   <node name="vesc_hw_interface_node" pkg="vesc_hw_interface" type="xr1_hw_interface_node" required="true" output="screen">
     <rosparam>
+      debug_no_device: false
       port: /dev/ttyACM0
       register_passive_wheels: true
       middle_wheel_mimics_front: false
@@ -40,6 +41,11 @@
 
       
     </rosparam>
+  </node>
+
+  <!-- Diagnostic Aggregator -->
+  <node pkg="diagnostic_aggregator" type="aggregator_node" name="diagnostic_aggregator">
+      <rosparam command="load" file="$(find vesc_hw_interface)/config/diagnostics.yaml"/>
   </node>
 
 </launch>
