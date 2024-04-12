@@ -100,6 +100,15 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
   motor_vesc_ids[2] = verifyVescID(id2, 127);
   motor_vesc_ids[3] = verifyVescID(id3, 67);
 
+  // Get gear ratios (motor gear teeth / wheel gear teeth)
+  double gear_ratios[4];
+  nh.param<double>("gear_ratio_front_left", gear_ratios[0], 0.5);
+  nh.param<double>("gear_ratio_rear_left", gear_ratios[1], 0.5);
+  nh.param<double>("gear_ratio_front_right", gear_ratios[2], 0.5);
+  nh.param<double>("gear_ratio_rear_right", gear_ratios[3], 0.5);
+
+  // fprintf(stderr, "\n\n****** GR: %f, %f, %f, %f\n\n", gear_ratios[0], gear_ratios[1], gear_ratios[2], gear_ratios[3] );
+
   // Make sure the VESC IDs given by the user are unique
   std::set<uint8_t> check_unique_ids(motor_vesc_ids.begin(), motor_vesc_ids.end());
   if (check_unique_ids.size() != motor_vesc_ids.size()){
@@ -112,7 +121,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
   // create a main motor directly connected to UART
   for (int i=0; i < 4; i++){
     // No local vesc for now
-    motors[i] = vesc_hw_interface::xr1PoweredMotor(motor_names[i], "velocity", uint8_t(motor_vesc_ids[i]), false, false);
+    motors[i] = vesc_hw_interface::xr1PoweredMotor(motor_names[i], "velocity", uint8_t(motor_vesc_ids[i]), false, false, gear_ratios[i]);
 
     motors[i].joint_limits_.has_velocity_limits = true;
     motors[i].joint_limits_.max_velocity = 1000.0;

@@ -231,6 +231,11 @@ bool VescInterface::isRxDataUpdated() const
 
 void VescInterface::send_no_fwd(const VescPacket& packet)
 {
+  if (!impl_->serial_.isOpen()){
+    std::stringstream ss;
+    ss << "!!!! serial was closed! port_name:  " << port_name;
+  }
+  
   size_t written = impl_->serial_.write(packet.getFrame());
   if (written != packet.getFrame().size())
   {

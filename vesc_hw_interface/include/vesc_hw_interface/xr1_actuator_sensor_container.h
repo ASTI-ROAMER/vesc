@@ -25,10 +25,10 @@ public:
   static constexpr double MAX_DUAL_VESC_CURRENT=40.0;           // per dual vesc controller (a dual vesc controller has 2 drivers, related to fuse used), ** check input current
   static constexpr double MAX_TOTAL_VESC_CURRENT=80.0;          // total current draw for all motors drivers (related to fuse used), ** check input current
   xr1PoweredMotor(){};
-  xr1PoweredMotor(std::string joint_name, std::string command_mode, uint8_t vesc_id, int local=false, int mock=false): 
+  xr1PoweredMotor(std::string joint_name, std::string command_mode, uint8_t vesc_id, int local=false, int mock=false, double gear_ratio=1.0): 
       joint_type_(urdf::Joint::CONTINUOUS), joint_name_(joint_name), command_mode_(command_mode), vesc_id_(vesc_id), is_local_(local), is_mock_(mock),
       cmd(0.0), pos(0.0),  vel(0.0), eff(0.0),
-      num_rotor_poles_(14), num_hall_sensors_(3), gear_ratio_(1.0), torque_const_(1.0), screw_lead_(1.0),
+      num_rotor_poles_(14), num_hall_sensors_(3), gear_ratio_(gear_ratio), torque_const_(1.0), screw_lead_(1.0),
       mc_last_update_time(0.0) {};
   ~xr1PoweredMotor(){};
 
