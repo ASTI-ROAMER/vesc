@@ -34,10 +34,10 @@ namespace vesc_hw_interface
 
   void xr1PoweredMotor::update_pos_vel_eff_from_pckt_vals(){
     pos = angles::normalize_angle(mc_tachometer_ *2.0*M_PI / (num_hall_sensors_ * num_rotor_poles_) * gear_ratio_);  // unit: rad or m
-    vel = mc_erpm_ / 60.0 * 2.0 * M_PI * gear_ratio_;                         // unit: rad/s or m/s
+    vel = (mc_erpm_ / (num_rotor_poles_ / 2.0)) / 60.0 * 2.0 * M_PI * gear_ratio_;                         // unit: rad/s [not: or m/s]
     eff = mc_motor_current_ * torque_const_ / gear_ratio_;                    // unit: Nm or N
 
-    // std::cout << "**********v"<< int(vesc_id_) <<":" << vel << std::endl;
+    // std::cout << "**********v"<< int(vesc_id_) <<"=   vel(rad/s): " << vel <<" ERPM:" << mc_erpm_ << std::endl;
   }
 
 
