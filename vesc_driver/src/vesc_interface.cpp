@@ -186,6 +186,7 @@ void VescInterface::connect(const std::string& port)
   // connect to serial port
   try
   {
+    port_name = port;
     impl_->serial_.setPort(port);
     impl_->serial_.open();
   }

@@ -2,7 +2,8 @@
 
 ## Parameters
 ### for VESC motors/wheels
-- debug_no_device (bool, false) - will enter debug mode if TRUE, in this mode, NO UART DEVICES ARE NEEDED, for debugging purposes.
+- debug_disable_motors (bool, false) - will disable communication with motors (vesc), DON'T NEED ACTUAL MOTORS TO RUN, for debugging purposes.
+- debug_disable_encoders (bool, false) - will disable communication with encoders, DON'T NEED ACTUAL ENCODERS TO RUN, for debugging purposes.
 - port (string) - a string to the name of the UART/Serial port to connect to VESC controller
   - ex.: port: /dev/ttyACM0
 - register_passive_wheels (bool, true) - if passive wheels are even registered to ros_control

@@ -336,7 +336,8 @@ private:
 
 
   // FOR NO DEVICE DEBUGGING (NO UART CONNECTED)
-  bool DEBUG_NO_DEVICE = false;
+  bool disable_motors = false;
+  bool disable_encoders = false;
 
 };
 const std::vector<std::string> XR1VescHwInterface::DEFAULT_COMP_JOINT_NAMES({"rocker_left_joint", "rocker_right_joint"});

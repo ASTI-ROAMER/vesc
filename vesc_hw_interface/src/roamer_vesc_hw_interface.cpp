@@ -34,57 +34,58 @@ XR1VescHwInterface::~XR1VescHwInterface()
 
 bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
 {
-  nh.param<bool>("debug_no_device", DEBUG_NO_DEVICE, false);
+  nh.param<bool>("debug_disable_motors", disable_motors, false);
+  nh.param<bool>("debug_disable_encoders", disable_encoders, false);
   
-  if(!DEBUG_NO_DEVICE){              // no uart devices connected
-  // reads a port name to open     
-  std::string port;
-  if (!nh.getParam("port", port))
-  {
-    ROS_FATAL("[XR1_VESC] VESC communication port parameter required.");
-    ros::shutdown();
-    return false;
-  }
-
-  // attempts to open the serial port
-  try
-  {
-    vesc_interface_.connect(port);
-  }
-  catch (serial::SerialException exception)
-  {
-    ROS_FATAL("[XR1_VESC] Failed to connect to the VESC, %s.", exception.what());
-    ros::shutdown();
-    return false;
-  }
-
-  // Get VESC ID of direct uart connected VESC, refer to [packetCallback()] for placing the value
-  ROS_INFO("[XR1_VESC] Requesting AppConf to get direct VESC ID...");
-  vesc_interface_.send(vesc_driver::VescGetAppConf(), -1);
-
-  unsigned int _count = 0;
-  int ms_sleep = 2, _timeout_ms = 3000;
-  while(direct_vesc_id_ == -1 ){
-    boost::this_thread::sleep( boost::posix_time::milliseconds(ms_sleep) );
-    if(ms_sleep * _count++ > _timeout_ms){
-      ROS_FATAL("[XR1_VESC] Failed to get to VESC ID in %d ms.",_timeout_ms);
+  if(!disable_motors){              // no uart devices connected
+    // reads a port name to open     
+    std::string port;
+    if (!nh.getParam("port", port))
+    {
+      ROS_FATAL("[XR1_VESC] VESC communication port parameter required.");
       ros::shutdown();
       return false;
     }
-  }
 
-  // Get VESC IDs/ CANBUS IDs of connected VESCs, refer to [packetCallback()] for placing the value
-  ROS_INFO("[XR1_VESC] Requesting CANBUS connected VESC IDs...");
-  vesc_interface_.send(vesc_driver::VescPingVescCanIDs(), -1);
+    // attempts to open the serial port
+    try
+    {
+      vesc_interface_.connect(port);
+    }
+    catch (serial::SerialException exception)
+    {
+      ROS_FATAL("[XR1_VESC] Failed to connect to the VESC, %s.", exception.what());
+      ros::shutdown();
+      return false;
+    }
 
-  while(detected_vesc_ids.size() <= 1){
-    boost::this_thread::sleep( boost::posix_time::milliseconds(ms_sleep) );
-    if(ms_sleep * _count++ > _timeout_ms){
-      ROS_INFO("[XR1_VESC] Failed to scan CANBUS ONLY connected VESCs in %d ms.",_timeout_ms);
-      break;
+    // Get VESC ID of direct uart connected VESC, refer to [packetCallback()] for placing the value
+    ROS_INFO("[XR1_VESC] Requesting AppConf to get direct VESC ID...");
+    vesc_interface_.send(vesc_driver::VescGetAppConf(), -1);
+
+    unsigned int _count = 0;
+    int ms_sleep = 2, _timeout_ms = 3000;
+    while(direct_vesc_id_ == -1 ){
+      boost::this_thread::sleep( boost::posix_time::milliseconds(ms_sleep) );
+      if(ms_sleep * _count++ > _timeout_ms){
+        ROS_FATAL("[XR1_VESC] Failed to get to VESC ID in %d ms.",_timeout_ms);
+        ros::shutdown();
+        return false;
+      }
+    }
+
+    // Get VESC IDs/ CANBUS IDs of connected VESCs, refer to [packetCallback()] for placing the value
+    ROS_INFO("[XR1_VESC] Requesting CANBUS connected VESC IDs...");
+    vesc_interface_.send(vesc_driver::VescPingVescCanIDs(), -1);
+
+    while(detected_vesc_ids.size() <= 1){
+      boost::this_thread::sleep( boost::posix_time::milliseconds(ms_sleep) );
+      if(ms_sleep * _count++ > _timeout_ms){
+        ROS_INFO("[XR1_VESC] Failed to scan CANBUS ONLY connected VESCs in %d ms.",_timeout_ms);
+        break;
+      }
     }
   }
-  } //DEBUG_NO_DEVICE
 
 
   // **** RANDEL: START new implementation ****************
@@ -152,17 +153,17 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     // ROS_INFO("joint type: %s", motors[i].joint_type_);
   }
 
-  if(!DEBUG_NO_DEVICE){              // no uart devices connected
-  // Find the local motor
-  try{
-    auto &m = *idTomotor_ptr_map.at(uint8_t(direct_vesc_id_));
-    m.is_local_ = true;
-  } catch(const std::out_of_range oor){
-    ROS_FATAL("[XR1_VESC] UART connected VESC not found in the known devices!");
-    ros::shutdown();
-    return false;
+  if(!disable_motors){              // no uart devices connected
+    // Find the local motor
+    try{
+      auto &m = *idTomotor_ptr_map.at(uint8_t(direct_vesc_id_));
+      m.is_local_ = true;
+    } catch(const std::out_of_range oor){
+      ROS_FATAL("[XR1_VESC] UART connected VESC not found in the known devices!");
+      ros::shutdown();
+      return false;
+    }
   }
-  } //DEBUG_NODEVICE
 
   // If we are strict, all given IDs should be found with CANBUS/UART
   bool _strict_all_ids;
@@ -171,7 +172,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     if(std::find(detected_vesc_ids.begin(), detected_vesc_ids.end(), m.vesc_id_) != detected_vesc_ids.end()) {
         ROS_INFO("[XR1_VESC] Motor ID [%d] is connected", m.vesc_id_);
     } else {
-      if(_strict_all_ids && !DEBUG_NO_DEVICE){
+      if(_strict_all_ids && !disable_motors){
         ROS_FATAL("[XR1_VESC] Using {strict_all_ids}, ID [%d] was not found! EXITING...", m.vesc_id_);
         ros::shutdown();
         return false;
@@ -199,18 +200,18 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
   }
 
   // attempts to open the serial port
-  if(!DEBUG_NO_DEVICE){              // no uart devices connected
-  try
-  {
-    leg_interface_.connect(leg_port);
+  if(!disable_encoders){
+    try
+    {
+      leg_interface_.connect(leg_port);
+    }
+    catch (serial::SerialException exception)
+    {
+      ROS_FATAL("[XR1_VESC] Failed to connect to the Leg Encoders, %s.", exception.what());
+      ros::shutdown();
+      return false;
+    }
   }
-  catch (serial::SerialException exception)
-  {
-    ROS_FATAL("[XR1_VESC] Failed to connect to the Leg Encoders, %s.", exception.what());
-    ros::shutdown();
-    return false;
-  }
-  } //DEBUG_NO_DEVICE
   
   nh.param<bool>("use_only_valid_leg_encoder_values", use_only_valid_leg_encoder_values, true);
 
@@ -334,41 +335,43 @@ void XR1VescHwInterface::read(const ros::Time& time, const ros::Duration& period
   // ROS_INFO("***RANDEL: Readi9ng");
   // vesc_interface_.requestState();
 
-  if(!DEBUG_NO_DEVICE){              // no uart devices connected
-  #if DEBUG_RANDEL == 1
-    fprintf(stderr, "@@@@@@ requesting VESC motor stats ***\n");
-  #endif // DEBUG_RANDEL
-  for (auto &m : motors){
-    if (m.is_mock_){
-      // Don't read from mock motors
-      continue;
-    }
-    if (m.command_mode_ == "velocity")
-    {
-      if (m.is_local_){
-        // vesc_interface_.requestState();
-        #if DEBUG_RANDEL == 1
-          fprintf(stderr, "@@@@@@ REQUEST LOCAL state[%d]***\n", m.vesc_id_);
-        #endif // DEBUG_RANDEL
-        vesc_interface_.send(vesc_driver::VescPacketRequestValues(), -1);
-      } else{
-        #if DEBUG_RANDEL == 1
-          fprintf(stderr, "@@@@@@ REQUEST CANBUS state[%d] ***\n", m.vesc_id_);
-        #endif // DEBUG_RANDEL
-        vesc_interface_.send(vesc_driver::VescPacketRequestValues(), m.vesc_id_);
+  if(!disable_motors){              // no uart devices connected
+    #if DEBUG_RANDEL == 1
+      fprintf(stderr, "@@@@@@ requesting VESC motor stats ***\n");
+    #endif // DEBUG_RANDEL
+    for (auto &m : motors){
+      if (m.is_mock_){
+        // Don't read from mock motors
+        continue;
+      }
+      if (m.command_mode_ == "velocity")
+      {
+        if (m.is_local_){
+          // vesc_interface_.requestState();
+          #if DEBUG_RANDEL == 1
+            fprintf(stderr, "@@@@@@ REQUEST LOCAL state[%d]***\n", m.vesc_id_);
+          #endif // DEBUG_RANDEL
+          vesc_interface_.send(vesc_driver::VescPacketRequestValues(), -1);
+        } else{
+          #if DEBUG_RANDEL == 1
+            fprintf(stderr, "@@@@@@ REQUEST CANBUS state[%d] ***\n", m.vesc_id_);
+          #endif // DEBUG_RANDEL
+          vesc_interface_.send(vesc_driver::VescPacketRequestValues(), m.vesc_id_);
+        }
       }
     }
   }
 
-  #if DEBUG_RANDEL == 1
-    fprintf(stderr, "@@@@@@ requesting leg enc ***\n");
-  #endif // DEBUG_RANDEL
-  if (use_only_valid_leg_encoder_values){
-    leg_interface_.send(vesc_driver::LegReqAllPosStatus(), -1);
-  } else{
-    leg_interface_.send(vesc_driver::LegReqAllPos(), -1);
+  if(!disable_encoders){
+    #if DEBUG_RANDEL == 1
+      fprintf(stderr, "@@@@@@ requesting leg enc ***\n");
+    #endif // DEBUG_RANDEL
+    if (use_only_valid_leg_encoder_values){
+      leg_interface_.send(vesc_driver::LegReqAllPosStatus(), -1);
+    } else{
+      leg_interface_.send(vesc_driver::LegReqAllPos(), -1);
+    }
   }
-  } //DEBUG_NO_DEVICE
 
   // fprintf(stderr, "@@@@@@ GET APPCONF ***\n");
   // vesc_interface_.send(vesc_driver::VescGetAppConf(), -1);
@@ -386,41 +389,41 @@ void XR1VescHwInterface::write(const ros::Time& time, const ros::Duration& perio
   // sends commands
   // auto &m = motors[1];
 
-  if(!DEBUG_NO_DEVICE){              // no uart devices connected
-  for (auto &m : motors){
-    #if DEBUG_RANDEL == 1
-      fprintf(stderr, "^^^^^^^^^^^^^^ TRYING TO WRITE FOR[%d]***\n", m.vesc_id_);
-    #endif // DEBUG_RANDEL
-    if (m.is_mock_){
-      // Don't write to mock motors
-      continue;
-    }
-    if (m.command_mode_ == "velocity")
-    {
-      m.limit_velocity_interface_.enforceLimits(period);
+  if(!disable_motors){
+    for (auto &m : motors){
+      #if DEBUG_RANDEL == 1
+        fprintf(stderr, "^^^^^^^^^^^^^^ TRYING TO WRITE FOR[%d]***\n", m.vesc_id_);
+      #endif // DEBUG_RANDEL
+      if (m.is_mock_){
+        // Don't write to mock motors
+        continue;
+      }
+      if (m.command_mode_ == "velocity")
+      {
+        m.limit_velocity_interface_.enforceLimits(period);
 
-      // converts the velocity unit: rad/s or m/s -> rpm -> erpm
-      const double command_rpm = m.cmd * 60.0 / 2.0 / M_PI / m.gear_ratio_;
-      const double command_erpm = command_rpm * static_cast<double>(m.num_rotor_poles_) / 2;
+        // converts the velocity unit: rad/s or m/s -> rpm -> erpm
+        const double command_rpm = m.cmd * 60.0 / 2.0 / M_PI / m.gear_ratio_;
+        const double command_erpm = command_rpm * static_cast<double>(m.num_rotor_poles_) / 2;
 
 
-      // fprintf(stderr, "****CMD[%d]: %f, %f, %f\n", m.vesc_id_, m.cmd, command_rpm, command_erpm);
-      // sends a reference velocity command
-      if (m.is_local_){
-        // vesc_interface_.setSpeed(command_erpm);
-        #if DEBUG_RANDEL == 1
-          fprintf(stderr, "$$$$$$ SEND LOCAL[%d]***: %f\n", m.vesc_id_, command_erpm);
-        #endif // DEBUG_RANDEL
-        vesc_interface_.send(vesc_driver::VescPacketSetVelocityERPM(command_erpm), -1);
-      } else{
-        #if DEBUG_RANDEL == 1
-          fprintf(stderr, "$$$$$$ SEND CANBUS[%d] ***: %f\n", m.vesc_id_, command_erpm);
-        #endif // DEBUG_RANDEL
-        vesc_interface_.send(vesc_driver::VescPacketSetVelocityERPM(command_erpm), m.vesc_id_);
+        // fprintf(stderr, "****CMD[%d]: %f, %f, %f\n", m.vesc_id_, m.cmd, command_rpm, command_erpm);
+        // sends a reference velocity command
+        if (m.is_local_){
+          // vesc_interface_.setSpeed(command_erpm);
+          #if DEBUG_RANDEL == 1
+            fprintf(stderr, "$$$$$$ SEND LOCAL[%d]***: %f\n", m.vesc_id_, command_erpm);
+          #endif // DEBUG_RANDEL
+          vesc_interface_.send(vesc_driver::VescPacketSetVelocityERPM(command_erpm), -1);
+        } else{
+          #if DEBUG_RANDEL == 1
+            fprintf(stderr, "$$$$$$ SEND CANBUS[%d] ***: %f\n", m.vesc_id_, command_erpm);
+          #endif // DEBUG_RANDEL
+          vesc_interface_.send(vesc_driver::VescPacketSetVelocityERPM(command_erpm), m.vesc_id_);
+        }
       }
     }
   }
-  } //DEBUG_NO_DEVICE
   // fprintf(stderr, "--------------------\n\n");
   /*
   else if (command_mode_ == "velocity_duty")
@@ -460,12 +463,12 @@ void XR1VescHwInterface::packetCallback(const std::shared_ptr<VescPacket const>&
 {
   // ROS_INFO("***RANDEL: packetCallback CALLED!!!");
 
-  if(!DEBUG_NO_DEVICE){              // no uart devices connected
-  if (!vesc_interface_.isRxDataUpdated())
-  {
-    ROS_WARN("[XR1VescHwInterface::packetCallback]packetCallcack called, but no packet received");
+  if(!disable_motors){
+    if (!vesc_interface_.isRxDataUpdated())
+    {
+      ROS_WARN("[XR1VescHwInterface::packetCallback]packetCallcack called, but no packet received");
+    }
   }
-  } //DEBUG_NO_DEVICE
 
   // RANDEL: DEBUG printout
   #if DEBUG_RANDEL == 1
@@ -558,12 +561,12 @@ void XR1VescHwInterface::errorCallback(const std::string& error)
 void XR1VescHwInterface::legPacketCallback(const std::shared_ptr<VescPacket const>& packet)
 {
   // ROS_INFO("***RANDEL: legpacketCallback CALLED!!!");
-  if(!DEBUG_NO_DEVICE){              // no uart devices connected
-  if (!leg_interface_.isRxDataUpdated())
-  {
-    ROS_WARN("[XR1VescHwInterface::legPacketCallback] called, but no packet received");
+  if(!disable_encoders){
+    if (!leg_interface_.isRxDataUpdated())
+    {
+      ROS_WARN("[XR1VescHwInterface::legPacketCallback] called, but no packet received");
+    }
   }
-  } //DEBUG_NO_DEVICE
 
   // RANDEL: DEBUG printout
   #if DEBUG_RANDEL == 1
@@ -698,15 +701,11 @@ void XR1VescHwInterface::xr1_hw_system_updater(diagnostic_updater::DiagnosticSta
   stat.add("Left VESC Dual Driver Current", left_vesc_cur_);
   stat.add("Right VESC Dual Driver Current", right_vesc_cur_);
 
-  if(!DEBUG_NO_DEVICE){
-    if(!leg_interface_.isConnected()){
-      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "Leg encoder UART port not connected!!");
-    }
+  if(!disable_motors){
     if(!vesc_interface_.isConnected()){
       stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "VESC UART port not connected!!");
     }
   
-
     if((left_vesc_cur_ > xr1PoweredMotor::MAX_DUAL_VESC_CURRENT) 
       || (right_vesc_cur_ > xr1PoweredMotor::MAX_DUAL_VESC_CURRENT)){
         stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "VESC dual driver max fuse current reached!!");
@@ -714,6 +713,12 @@ void XR1VescHwInterface::xr1_hw_system_updater(diagnostic_updater::DiagnosticSta
 
     if(total_vesc_cur_ > xr1PoweredMotor::MAX_TOTAL_VESC_CURRENT) {
         stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "Total VESC driver max fuse current reached!!");
+    }
+  }
+
+  if(!disable_encoders){
+    if(!leg_interface_.isConnected()){
+      stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::ERROR, "Leg encoder UART port not connected!!");
     }
 
     if (!(comp_joints_.isEncUpToDate && normal_joints_[0].isEncUpToDate && normal_joints_[1].isEncUpToDate)){
@@ -788,7 +793,7 @@ void XR1VescHwInterface::xr1_hw_encoders_updater(diagnostic_updater::DiagnosticS
   stat.add("Left Bogie Status", bool(normal_joints_[0].isEncUpToDate));
   stat.add("Right Bogie Status", bool(normal_joints_[1].isEncUpToDate));
   
-  if(!DEBUG_NO_DEVICE){
+  if(!disable_encoders){
     if (!(comp_joints_.isEncUpToDate && normal_joints_[0].isEncUpToDate && normal_joints_[1].isEncUpToDate)){
       stat.mergeSummary(diagnostic_msgs::DiagnosticStatus::WARN, "At least 1 of the leg joint encoders is not updated (Possibly disconnected cable)!");
     }

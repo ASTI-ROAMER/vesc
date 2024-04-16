@@ -19,7 +19,9 @@
     <param name="gear_ratio_rear_right" value="$(eval 30.0 / 60.0)" />
 
     <rosparam>
-      debug_no_device: false
+      debug_disable_motors: false
+      debug_disable_encoders: false
+      
       port: /dev/ttyACM0
       register_passive_wheels: true
       middle_wheel_mimics_front: false
