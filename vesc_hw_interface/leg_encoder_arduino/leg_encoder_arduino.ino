@@ -53,6 +53,19 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/*PIN Layout
+
+ A  |  2   - (WHITE-ORANGE)  - CS pin for MIDDLE - to WHITE-ORANGE wire to encoder - pin 6 (right-most) | A
+ R  |  3   - (BROWN)         - CS pin for LEFT   - to WHITE-ORANGE wire to encoder - pin 6 (right-most) | M
+ D  |  4   - (BROWN-WHITE)   - CS pin for RIGHT  - to WHITE-ORANGE wire to encoder - pin 6 (right-most) | T
+ U  |                                                                                                   | 2
+ I  |  11  - (WHITE-BLUE)    - MOSI              - same color wire to encoder      - pin 3              | 2
+ N  |  12  - (ORANGE)        - MISO              - same color wire to encoder      - pin 5              | 
+ 0 S|  13  - (BLUE)          - CLK               - same color wire to encoder      - pin 2              | E
+   I|                                                                                                   | N
+   D|  VDD - (WHITE-GREEN)   - 5V                - same color wire to encoder      - pin 1 (left-most)  | C
+   E|  GND - (GREEN)         - GND               - same color wire to encoder      - pin 4              | 
+*/ 
 
 /* Include the SPI library for the arduino boards */
 #include <SPI.h>

@@ -21,6 +21,7 @@
     <rosparam>
       debug_disable_motors: false
       debug_disable_encoders: false
+      debug_print_enc_vals: false
       
       port: /dev/ttyACM0
       register_passive_wheels: true
@@ -37,16 +38,16 @@
 
       rocker_left_joint_name: "rocker_left_joint"
       rocker_right_joint_name: "rocker_right_joint"
-      rocker_zero_enc_val: 3765
+      rocker_zero_enc_val: 3784
       rocker_reverse_dir: false
 
       bogie_left_joint_name: "bogie_left_joint"
-      bogie_left_zero_enc_val: 3950
+      bogie_left_zero_enc_val: 164
       bogie_left_reverse_dir: false
 
       bogie_right_joint_name: "bogie_right_joint"
-      bogie_right_zero_enc_val: 0
-      bogie_right_reverse_dir: false
+      bogie_right_zero_enc_val: 1097
+      bogie_right_reverse_dir: true
 
       
     </rosparam>

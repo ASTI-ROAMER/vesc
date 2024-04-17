@@ -36,6 +36,7 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
 {
   nh.param<bool>("debug_disable_motors", disable_motors, false);
   nh.param<bool>("debug_disable_encoders", disable_encoders, false);
+  nh.param<bool>("debug_print_enc_vals", print_enc_vals, false);
   
   if(!disable_motors){              // no uart devices connected
     // reads a port name to open     
@@ -52,9 +53,9 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     {
       vesc_interface_.connect(port);
     }
-    catch (serial::SerialException exception)
+    catch (vesc_driver::SerialException exception)
     {
-      ROS_FATAL("[XR1_VESC] Failed to connect to the VESC, %s.", exception.what());
+      ROS_FATAL("[XR1_VESC] Failed to connect to the VESC [%s].\n\n%s.", port.c_str(), exception.what());
       ros::shutdown();
       return false;
     }
@@ -205,9 +206,9 @@ bool XR1VescHwInterface::init(ros::NodeHandle& nh_root, ros::NodeHandle& nh)
     {
       leg_interface_.connect(leg_port);
     }
-    catch (serial::SerialException exception)
+    catch (vesc_driver::SerialException exception)
     {
-      ROS_FATAL("[XR1_VESC] Failed to connect to the Leg Encoders, %s.", exception.what());
+      ROS_FATAL("[XR1_VESC] Failed to connect to the Leg Encoders [%s].\n\n%s.", leg_port.c_str(), exception.what());
       ros::shutdown();
       return false;
     }
@@ -650,7 +651,10 @@ void XR1VescHwInterface::legPacketCallback(const std::shared_ptr<VescPacket cons
         fprintf(stderr, "[%d]raw_encval: %04x (%d dec) (%f rad)\n", i, enc_val, enc_val, rad_a);
         fprintf(stderr, "[%d]processed(z %d): zeroed: %d,  zd: %d,  final: %frad\n", i, temp_j_ptrs[i]->enc_zero_val, temp_j_ptrs[i]->zeroed_enc_val(), temp_j_ptrs[i]->zeroed_dir_enc_val(), temp_j_ptrs[i]->final_pos_rad());
       #endif // DEBUG_RANDEL
-    } 
+      if(print_enc_vals){
+        fprintf(stderr, "enc[%d]: %u\n", i, (unsigned int)enc_val);
+      }
+    }
   }
   
 
